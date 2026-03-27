@@ -1,0 +1,3 @@
+/Users/g5/Claude-Projects/Code copy/cisco-pqc-vpn-wasm/build/CMakeFiles/ios-engine.dir
+/Users/g5/Claude-Projects/Code copy/cisco-pqc-vpn-wasm/build/CMakeFiles/edit_cache.dir
+/Users/g5/Claude-Projects/Code copy/cisco-pqc-vpn-wasm/build/CMakeFiles/rebuild_cache.dir

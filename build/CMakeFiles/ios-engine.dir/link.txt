@@ -1,0 +1,1 @@
+/opt/homebrew/Cellar/emscripten/5.0.4/libexec/em++ -O3 -DNDEBUG --bind -s MODULARIZE=1 -s EXPORT_NAME=IOSEngineModule -s ALLOW_MEMORY_GROWTH=1 -s INITIAL_MEMORY=4194304 -s NO_FILESYSTEM=1 -s ENVIRONMENT=web -s SINGLE_FILE=0 @CMakeFiles/ios-engine.dir/objects1.rsp -o ios-engine.js
