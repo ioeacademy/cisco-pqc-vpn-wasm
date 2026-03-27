@@ -332,11 +332,9 @@ const TOPO_LINKS = [
   {r1:'r1', iface1:'Serial0/0/0', r2:'r2', iface2:'Serial0/0/0'},
 ];
 </script>
-<script src="ios-engine-base.min.js"></script>
-<script src="ios-engine-extended-mlkem.min.js"></script>
-<!-- WASM engine upgrade (falls back to JS if WASM fails) -->
+<!-- Unified C++/WASM IOS Engine -->
 <script src="dist/ios-engine.js"></script>
-<script src="js/ios-wasm-shim.js"></script>
+<script src="js/ios-adapter.js"></script>
 <script>
 /* =====================================================================
    TUTORIAL STEPS DEFINITION — Post-Quantum Cryptography VPN (ML-KEM Variant)
@@ -2796,27 +2794,9 @@ document.addEventListener('keydown', (e) => {
 /* =====================================================================
    INIT
 ===================================================================== */
+document.addEventListener('wasm-ready', function() {
 (function init() {
-  ROUTERS.forEach(rKey => {
-    const dev = createDevice(CELL_ID, rKey);
-    iosDevices[CELL_ID+'_'+rKey] = dev;
-    // Restore saved startup-config from localStorage
-    if (restoreDevice(dev)) {
-      recalcOSPF(CELL_ID);
-    }
-  });
-  PCS.forEach(pcKey => {
-    iosDevices[CELL_ID+'_'+pcKey] = createPC(CELL_ID, pcKey);
-    // Restore PC config from localStorage
-    try {
-      const json = localStorage.getItem('pqc_startup_' + pcKey);
-      if (json) {
-        const s = JSON.parse(json);
-        const pc = iosDevices[CELL_ID+'_'+pcKey];
-        if (s.ip) { pc.ip = s.ip; pc.mask = s.mask; pc.gateway = s.gateway; }
-      }
-    } catch(e) {}
-  });
+  // Devices already created by ios-adapter.js
   iosActiveTab[CELL_ID] = 'r1';
 
   const wrap = document.getElementById('terminal-wrap');
@@ -3039,6 +3019,7 @@ document.addEventListener('keydown', (e) => {
 
   setTimeout(() => document.getElementById('ios-in-'+CELL_ID+'_r1')?.focus(), 50);
 })();
+}); // wasm-ready
 </script>
 
 <!-- Badge Completion Modal -->
