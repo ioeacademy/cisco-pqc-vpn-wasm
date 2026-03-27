@@ -1030,7 +1030,7 @@ function autoRunCommands(stepIdx) {
     totalDelay += (cmds.length + 1) * delay + 300;
   });
   setTimeout(() => {
-    if (btn) { btn.disabled = false; btn.textContent = '\u{1F441} Show Me'; }
+    if (btn) { btn.disabled = true; btn.textContent = '\u2705 Done'; btn.style.borderColor = '#8b949e'; btn.style.color = '#8b949e'; }
   }, totalDelay + 200);
 }
 
