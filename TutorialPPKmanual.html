@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Quantum-Safe VPN — IKEv2 PPK | v1.1</title>
+  <title>Quantum-Safe VPN — IKEv2 PPK | v2.0</title>
   <script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
   <style>
@@ -291,7 +291,7 @@
 <div class="lab-nav">
   <a class="nav-home" href="index.html">&larr; Home</a>
   <div class="nav-sep"></div>
-  <span class="tutorial-badge">v1.1</span>
+  <span class="tutorial-badge">v2.0</span>
   <span class="nav-title">Quantum-Safe VPN &mdash; IKEv2 PPK (RFC 8784)</span>
   <span class="nav-progress" id="nav-progress">0 / 14</span>
 </div>
@@ -375,10 +375,17 @@ Cisco IOS XE implements **RFC 8784** — an extension to IKEv2 that mixes an add
 
 #### Network Topology:
 
-| Router | LAN Interface (Gi0/0) | WAN Interface (Se0/0/0) |
+| Router | LAN Interface (Gi0/0) | WAN Interface (Se0/0/0) | Tunnel0 |
+|---|---|---|---|
+| **R1** | 10.10.10.1/24 | 192.168.12.1/30 | 10.10.0.1/30 |
+| **R2** | 11.11.11.1/24 | 192.168.12.2/30 | 10.10.0.2/30 |
+
+| Host | IP Address | Gateway |
 |---|---|---|
-| **R1** | 10.0.1.0/24 (gateway .1) | 192.168.12.1/30 |
-| **R2** | 10.0.2.0/24 (gateway .1) | 192.168.12.2/30 |
+| **PC1** | 10.10.10.100/24 | 10.10.10.1 |
+| **PC2** | 11.11.11.100/24 | 11.11.11.1 |
+
+> **Note:** This tutorial uses the modern **VTI (Virtual Tunnel Interface)** approach instead of legacy crypto maps (which reached End-of-Life per Cisco bulletin).
 
 > **Reference:** Based on [Cisco IOS XE 17.x — Configuring Quantum-Safe Encryption Using Postquantum Preshared Keys](https://www.cisco.com/c/en/us/td/docs/routers/ios/config/17-x/sec-vpn/b-security-vpn/m-sec-cfg-quantum-encryption-ppk.html)
 
@@ -399,14 +406,14 @@ Before building the VPN, both routers need IP addresses and routes.
 enable
 configure terminal
 interface GigabitEthernet0/0
- ip address 10.0.1.1 255.255.255.0
+ ip address 10.10.10.1 255.255.255.0
  no shutdown
  exit
 interface Serial0/0/0
  ip address 192.168.12.1 255.255.255.252
  no shutdown
  exit
-ip route 10.0.2.0 255.255.255.0 192.168.12.2
+ip route 11.11.11.0 255.255.255.0 192.168.12.2
 end
 \`\`\`
 
@@ -415,25 +422,26 @@ end
 enable
 configure terminal
 interface GigabitEthernet0/0
- ip address 10.0.2.1 255.255.255.0
+ ip address 11.11.11.1 255.255.255.0
  no shutdown
  exit
 interface Serial0/0/0
  ip address 192.168.12.2 255.255.255.252
  no shutdown
  exit
-ip route 10.0.1.0 255.255.255.0 192.168.12.1
+ip route 10.10.10.0 255.255.255.0 192.168.12.1
 end
 \`\`\`
 
-> **Verify:** On R1, run \`ping 10.0.2.1\`. You should see \`!!!!!\` (5 successful pings).`,
+> **Verify:** On R1, run \`ping 11.11.11.1\`. You should see \`!!!!!\` (5 successful pings).
+> **Note:** These static routes via Serial will be replaced later by routes via Tunnel0 once the VTI is configured.`,
   commands: {
-    r1: ['enable','configure terminal','interface GigabitEthernet0/0','ip address 10.0.1.1 255.255.255.0','no shutdown','exit','interface Serial0/0/0','ip address 192.168.12.1 255.255.255.252','no shutdown','exit','ip route 10.0.2.0 255.255.255.0 192.168.12.2','end'],
-    r2: ['enable','configure terminal','interface GigabitEthernet0/0','ip address 10.0.2.1 255.255.255.0','no shutdown','exit','interface Serial0/0/0','ip address 192.168.12.2 255.255.255.252','no shutdown','exit','ip route 10.0.1.0 255.255.255.0 192.168.12.1','end']
+    r1: ['enable','configure terminal','interface GigabitEthernet0/0','ip address 10.10.10.1 255.255.255.0','no shutdown','exit','interface Serial0/0/0','ip address 192.168.12.1 255.255.255.252','no shutdown','exit','ip route 11.11.11.0 255.255.255.0 192.168.12.2','end'],
+    r2: ['enable','configure terminal','interface GigabitEthernet0/0','ip address 11.11.11.1 255.255.255.0','no shutdown','exit','interface Serial0/0/0','ip address 192.168.12.2 255.255.255.252','no shutdown','exit','ip route 10.10.10.0 255.255.255.0 192.168.12.1','end']
   },
-  validate:()=>isReachable(CELL_ID,'r1','10.0.2.1') && isReachable(CELL_ID,'r2','10.0.1.1'),
+  validate:()=>isReachable(CELL_ID,'r1','11.11.11.1') && isReachable(CELL_ID,'r2','10.10.10.1'),
   hints:[
-    { detect:(dev,cmd)=>cmd.match(/ping\s+10\.0\.2\.1/i) && !isReachable(CELL_ID,'r1','10.0.2.1'),
+    { detect:(dev,cmd)=>cmd.match(/ping\s+11\.11\.11\.1/i) && !isReachable(CELL_ID,'r1','11.11.11.1'),
       message:'Ping fails. Check that <strong>both</strong> routers have IPs configured, interfaces are <code>no shutdown</code>, and static routes are in place.', type:'warning' },
     { detect:(dev,cmd)=>cmd.match(/^ip\s+addr/i) && dev.mode!=='interface',
       message:'You need to be in interface mode first. Use <code>interface GigabitEthernet0/0</code> or <code>interface Serial0/0/0</code>.', type:'nudge' },
@@ -475,7 +483,7 @@ crypto isakmp policy 10
  authentication pre-share
  group 16
  exit
-crypto isakmp key cisco123 address 192.168.12.2
+crypto isakmp key cisco123 address 11.11.11.1
 \`\`\`
 
 **On R2:**
@@ -486,15 +494,15 @@ crypto isakmp policy 10
  authentication pre-share
  group 16
  exit
-crypto isakmp key cisco123 address 192.168.12.1
+crypto isakmp key cisco123 address 10.10.10.1
 \`\`\`
 
 > - \`aes-cbc-256\` = AES-256 CBC encryption
 > - \`sha256\` = SHA-256 integrity hash
 > - \`group 16\` = 4096-bit DH group (strong classical DH)`,
   commands: {
-    r1: ['configure terminal','crypto ikev2 proposal CLASSIC-VPN-PROPOSAL','encryption aes-cbc-256','integrity sha256','group 16','exit','crypto ikev2 policy VPN-POLICY','proposal CLASSIC-VPN-PROPOSAL','exit','crypto isakmp policy 10','encryption aes 256','hash sha256','authentication pre-share','group 16','exit','crypto isakmp key cisco123 address 192.168.12.2','end'],
-    r2: ['configure terminal','crypto ikev2 proposal CLASSIC-VPN-PROPOSAL','encryption aes-cbc-256','integrity sha256','group 16','exit','crypto ikev2 policy VPN-POLICY','proposal CLASSIC-VPN-PROPOSAL','exit','crypto isakmp policy 10','encryption aes 256','hash sha256','authentication pre-share','group 16','exit','crypto isakmp key cisco123 address 192.168.12.1','end']
+    r1: ['configure terminal','crypto ikev2 proposal CLASSIC-VPN-PROPOSAL','encryption aes-cbc-256','integrity sha256','group 16','exit','crypto ikev2 policy VPN-POLICY','proposal CLASSIC-VPN-PROPOSAL','exit','crypto isakmp policy 10','encryption aes 256','hash sha256','authentication pre-share','group 16','exit','crypto isakmp key cisco123 address 11.11.11.1','end'],
+    r2: ['configure terminal','crypto ikev2 proposal CLASSIC-VPN-PROPOSAL','encryption aes-cbc-256','integrity sha256','group 16','exit','crypto ikev2 policy VPN-POLICY','proposal CLASSIC-VPN-PROPOSAL','exit','crypto isakmp policy 10','encryption aes 256','hash sha256','authentication pre-share','group 16','exit','crypto isakmp key cisco123 address 10.10.10.1','end']
   },
   validate:()=>{
     const d1=iosDevices[CELL_ID+'_r1'], d2=iosDevices[CELL_ID+'_r2'];
@@ -502,15 +510,15 @@ crypto isakmp key cisco123 address 192.168.12.1
     const prop1=d1.crypto.ikev2Proposals['CLASSIC-VPN-PROPOSAL'], prop2=d2.crypto.ikev2Proposals['CLASSIC-VPN-PROPOSAL'];
     const pol1=d1.crypto.ikev2Policies['VPN-POLICY'], pol2=d2.crypto.ikev2Policies['VPN-POLICY'];
     if(!prop1||!prop2||!pol1||!pol2) return false;
-    const k1=d1.crypto.isakmpKeys.find(k=>k.peerAddr==='192.168.12.2');
-    const k2=d2.crypto.isakmpKeys.find(k=>k.peerAddr==='192.168.12.1');
+    const k1=d1.crypto.isakmpKeys.find(k=>k.peerAddr==='11.11.11.1');
+    const k2=d2.crypto.isakmpKeys.find(k=>k.peerAddr==='10.10.10.1');
     return !!(k1 && k2 && k1.key===k2.key);
   },
   hints:[
-    { detect:(dev,cmd)=>cmd.match(/crypto\s+isakmp\s+key/i) && cmd.match(/address\s+192\.168\.12\.\d/) && dev._rKey==='r1' && cmd.includes('192.168.12.1'),
-      message:'On R1, the address should be R2\'s WAN IP: <code>192.168.12.2</code> (not R1\'s own IP).', type:'warning' },
-    { detect:(dev,cmd)=>cmd.match(/crypto\s+isakmp\s+key/i) && cmd.match(/address\s+192\.168\.12\.\d/) && dev._rKey==='r2' && cmd.includes('192.168.12.2'),
-      message:'On R2, the address should be R1\'s WAN IP: <code>192.168.12.1</code> (not R2\'s own IP).', type:'warning' },
+    { detect:(dev,cmd)=>cmd.match(/crypto\s+isakmp\s+key/i) && dev._rKey==='r1' && cmd.includes('10.10.10.1'),
+      message:'On R1, the address should be R2\'s LAN IP: <code>11.11.11.1</code> (not R1\'s own IP).', type:'warning' },
+    { detect:(dev,cmd)=>cmd.match(/crypto\s+isakmp\s+key/i) && dev._rKey==='r2' && cmd.includes('11.11.11.1'),
+      message:'On R2, the address should be R1\'s LAN IP: <code>10.10.10.1</code> (not R2\'s own IP).', type:'warning' },
   ]
 },
 
@@ -547,97 +555,104 @@ crypto ipsec transform-set PQC-TRANSFORM esp-256-aes esp-sha256-hmac
   ]
 },
 
-/* -- Step 5: Crypto ACL -- */
+/* -- Step 5: Crypto IPSec Profile -- */
 {
-  title:'Define Interesting Traffic (ACL)',
+  title:'Configure Crypto IPSec Profile',
   type:'config', part:'base', router:'both',
-  instruction:`### Step 5 — Crypto Access List
+  instruction:`### Step 5 — Crypto IPSec Profile
 
-> **Concept:** A crypto ACL defines which traffic should be encrypted (**"interesting traffic"**). Only packets matching this ACL will be sent through the VPN tunnel.
+> **Concept:** An IPSec profile bundles the transform set and IKEv2 profile into a reusable policy object. This is the modern replacement for crypto maps (which reached End-of-Life per Cisco EOL bulletin). Unlike crypto maps, IPSec profiles do **not** require ACLs — encryption is driven by routing through the tunnel interface instead.
 
-#### On R1 (traffic FROM R1's LAN TO R2's LAN):
+#### On both R1 and R2:
 \`\`\`
-access-list 101 permit ip 10.0.1.0 0.0.0.255 10.0.2.0 0.0.0.255
+configure terminal
+crypto ipsec profile PQC-IPSEC-PROFILE
+ set transform-set PQC-TRANSFORM
+ set ikev2-profile PQC-IKE-PROFILE
+ exit
+end
 \`\`\`
 
-#### On R2 (traffic FROM R2's LAN TO R1's LAN — **mirrored**):
-\`\`\`
-access-list 101 permit ip 10.0.2.0 0.0.0.255 10.0.1.0 0.0.0.255
-\`\`\`
-
-> **Important:** The ACLs must be **mirrored** — R1's source is R2's destination and vice versa. The \`0.0.0.255\` is a wildcard mask matching the /24 subnet.`,
+> - \`crypto ipsec profile\` = Creates a named IPSec profile (analogous to a crypto map entry, but simpler)
+> - \`set transform-set\` = Links the ESP encryption/integrity algorithms
+> - \`set ikev2-profile\` = Links the IKEv2 profile for authentication and PPK
+> - No ACL needed — the VTI handles traffic selection via routing`,
   commands: {
-    r1: ['configure terminal','access-list 101 permit ip 10.0.1.0 0.0.0.255 10.0.2.0 0.0.0.255','end'],
-    r2: ['configure terminal','access-list 101 permit ip 10.0.2.0 0.0.0.255 10.0.1.0 0.0.0.255','end']
+    r1: ['configure terminal','crypto ipsec profile PQC-IPSEC-PROFILE','set transform-set PQC-TRANSFORM','set ikev2-profile PQC-IKE-PROFILE','exit','end'],
+    r2: ['configure terminal','crypto ipsec profile PQC-IPSEC-PROFILE','set transform-set PQC-TRANSFORM','set ikev2-profile PQC-IKE-PROFILE','exit','end']
   },
   validate:()=>{
     const d1=iosDevices[CELL_ID+'_r1'], d2=iosDevices[CELL_ID+'_r2'];
     if(!d1||!d2) return false;
-    const a1=d1.accessLists[101], a2=d2.accessLists[101];
-    return !!(a1?.some(e=>e.action==='permit'&&e.srcNet==='10.0.1.0') && a2?.some(e=>e.action==='permit'&&e.srcNet==='10.0.2.0'));
+    const p1=d1.crypto.ipsecProfiles?.['PQC-IPSEC-PROFILE'], p2=d2.crypto.ipsecProfiles?.['PQC-IPSEC-PROFILE'];
+    return !!(p1?.transformSet && p1?.ikev2Profile && p2?.transformSet && p2?.ikev2Profile);
   },
   hints:[
-    { detect:(dev,cmd)=>{
-        if(!cmd.match(/access-list\s+101/i)) return false;
-        if(dev._rKey==='r1' && cmd.includes('10.0.2.0') && cmd.indexOf('10.0.2.0')<cmd.indexOf('10.0.1.0')) return true;
-        if(dev._rKey==='r2' && cmd.includes('10.0.1.0') && cmd.indexOf('10.0.1.0')<cmd.indexOf('10.0.2.0')) return true;
-        return false;
-      },
-      message:'The ACL source and destination appear reversed. On R1, source is <code>10.0.1.0</code>, destination is <code>10.0.2.0</code>. On R2, it is the opposite.', type:'warning' },
+    { detect:(dev,cmd)=>cmd.match(/crypto\s+ipsec\s+profile/i) && !cmd.match(/PQC-IPSEC-PROFILE/i),
+      message:'Use the profile name <code>PQC-IPSEC-PROFILE</code> on both routers so they match.', type:'nudge' },
+    { detect:(dev,cmd)=>cmd.match(/set\s+ikev2-profile/i) && !cmd.match(/PQC-IKE-PROFILE/i),
+      message:'The IKEv2 profile name should be <code>PQC-IKE-PROFILE</code> (this will be created in Step 10).', type:'nudge' },
   ]
 },
 
-/* -- Step 6: Crypto Map -- */
+/* -- Step 6: Virtual Tunnel Interface (VTI) -- */
 {
-  title:'Create & Apply Crypto Map',
+  title:'Configure Virtual Tunnel Interface (VTI)',
   type:'config', part:'base', router:'both',
-  instruction:`### Step 6 — Crypto Map
+  instruction:`### Step 6 — Virtual Tunnel Interface (VTI)
 
-> **Concept:** The crypto map **ties everything together**: it links the peer address, transform set, and ACL into one policy, then gets applied to the WAN interface.
+> **Concept:** VTI is the modern replacement for crypto maps. Instead of policy-based encryption (matching traffic against ACLs), VTI uses **routing-based encryption** — any traffic routed into the tunnel interface is automatically encrypted. This is simpler, more scalable, and supports dynamic routing protocols over the tunnel.
 
 #### On R1:
 \`\`\`
-crypto map PQC-MAP 10 ipsec-isakmp
- set peer 192.168.12.2
- set transform-set PQC-TRANSFORM
- set ikev2-profile PQC-PROFILE
- match address 101
+configure terminal
+interface Tunnel0
+ ip address 10.10.0.1 255.255.255.252
+ tunnel source GigabitEthernet0/0
+ tunnel destination 11.11.11.1
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile PQC-IPSEC-PROFILE
  exit
-interface Serial0/0/0
- crypto map PQC-MAP
- exit
+ip route 11.11.11.0 255.255.255.0 Tunnel0
+end
 \`\`\`
 
 #### On R2:
 \`\`\`
-crypto map PQC-MAP 10 ipsec-isakmp
- set peer 192.168.12.1
- set transform-set PQC-TRANSFORM
- set ikev2-profile PQC-PROFILE
- match address 101
+configure terminal
+interface Tunnel0
+ ip address 10.10.0.2 255.255.255.252
+ tunnel source GigabitEthernet0/0
+ tunnel destination 10.10.10.1
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile PQC-IPSEC-PROFILE
  exit
-interface Serial0/0/0
- crypto map PQC-MAP
- exit
+ip route 10.10.10.0 255.255.255.0 Tunnel0
+end
 \`\`\`
 
-> - The crypto map links the peer, transform set, IKEv2 profile, and ACL
-> - \`set ikev2-profile\` binds the IKEv2 profile for PPK quantum-safe negotiation
-> - Must be **applied to the WAN interface** (Serial0/0/0) for encryption to take effect`,
+> - \`tunnel source/destination\` = Outer IP header endpoints (uses LAN IPs for reachability)
+> - \`tunnel mode ipsec ipv4\` = IPSec tunnel mode (encrypts inner packets)
+> - \`tunnel protection ipsec profile\` = Links the IPSec profile for encryption parameters
+> - The static route directs remote LAN traffic **through the tunnel** — this is what triggers encryption
+> - No ACLs needed — routing determines what gets encrypted`,
   commands: {
-    r1: ['configure terminal','crypto map PQC-MAP 10 ipsec-isakmp','set peer 192.168.12.2','set transform-set PQC-TRANSFORM','set ikev2-profile PQC-PROFILE','match address 101','exit','interface Serial0/0/0','crypto map PQC-MAP','exit','end'],
-    r2: ['configure terminal','crypto map PQC-MAP 10 ipsec-isakmp','set peer 192.168.12.1','set transform-set PQC-TRANSFORM','set ikev2-profile PQC-PROFILE','match address 101','exit','interface Serial0/0/0','crypto map PQC-MAP','exit','end']
+    r1: ['configure terminal','interface Tunnel0','ip address 10.10.0.1 255.255.255.252','tunnel source GigabitEthernet0/0','tunnel destination 11.11.11.1','tunnel mode ipsec ipv4','tunnel protection ipsec profile PQC-IPSEC-PROFILE','exit','ip route 11.11.11.0 255.255.255.0 Tunnel0','end'],
+    r2: ['configure terminal','interface Tunnel0','ip address 10.10.0.2 255.255.255.252','tunnel source GigabitEthernet0/0','tunnel destination 10.10.10.1','tunnel mode ipsec ipv4','tunnel protection ipsec profile PQC-IPSEC-PROFILE','exit','ip route 10.10.10.0 255.255.255.0 Tunnel0','end']
   },
   validate:()=>{
     const d1=iosDevices[CELL_ID+'_r1'], d2=iosDevices[CELL_ID+'_r2'];
     if(!d1||!d2) return false;
-    return !!(d1.crypto.appliedCryptoMap['Serial0/0/0'] && d2.crypto.appliedCryptoMap['Serial0/0/0']);
+    const t1=d1.interfaces['Tunnel0'], t2=d2.interfaces['Tunnel0'];
+    return !!(t1?.ip && t2?.ip && t1.tunnelConfig?.ipsecProfile && t2.tunnelConfig?.ipsecProfile);
   },
   hints:[
-    { detect:(dev,cmd)=>cmd.match(/crypto\s+map\s+\S+$/i) && dev.mode==='global',
-      message:'To apply a crypto map to an interface, first enter interface mode: <code>interface Serial0/0/0</code>, then <code>crypto map PQC-MAP</code>.', type:'nudge' },
-    { detect:(dev,cmd)=>cmd.match(/set\s+peer/i) && dev._rKey==='r1' && cmd.includes('192.168.12.1'),
-      message:'On R1, the peer should be R2\'s IP: <code>192.168.12.2</code>.', type:'warning' },
+    { detect:(dev,cmd)=>cmd.match(/tunnel\s+destination/i) && dev._rKey==='r1' && cmd.includes('10.10.10.1'),
+      message:'On R1, the tunnel destination should be R2\'s LAN IP: <code>11.11.11.1</code> (not R1\'s own IP).', type:'warning' },
+    { detect:(dev,cmd)=>cmd.match(/tunnel\s+destination/i) && dev._rKey==='r2' && cmd.includes('11.11.11.1'),
+      message:'On R2, the tunnel destination should be R1\'s LAN IP: <code>10.10.10.1</code> (not R2\'s own IP).', type:'warning' },
+    { detect:(dev,cmd)=>cmd.match(/tunnel\s+protection/i) && !cmd.match(/PQC-IPSEC-PROFILE/i),
+      message:'Use the IPSec profile name <code>PQC-IPSEC-PROFILE</code> (from Step 5).', type:'nudge' },
   ]
 },
 
@@ -647,13 +662,18 @@ interface Serial0/0/0
   type:'config', part:'base', router:'r1',
   instruction:`### Step 7 — Verify the Classical VPN
 
-Your IPSec VPN tunnel should now be active. Let's verify:
+Your IPSec VPN tunnel should now be active via the VTI. Let's verify:
 
 #### On R1, run these show commands:
 \`\`\`
-show crypto isakmp sa
+show crypto ipsec profile
 \`\`\`
-> Look for **QM_IDLE** status — this means Phase 1 is established.
+> Verify the IPSec profile is configured with the correct transform set and IKEv2 profile.
+
+\`\`\`
+show crypto session
+\`\`\`
+> Shows active crypto sessions. Look for **Session status: UP-ACTIVE**.
 
 \`\`\`
 show crypto ipsec sa
@@ -661,18 +681,18 @@ show crypto ipsec sa
 > Shows the IPSec Security Associations with encryption/decryption counters.
 
 \`\`\`
-ping 10.0.2.1
+ping 11.11.11.1
 \`\`\`
-> You should see \`!!!!!\` — traffic is now encrypted through the VPN!
+> You should see \`!!!!!\` — traffic is now encrypted through the VPN tunnel!
 
 > **Note:** The tunnel is currently using **classical cryptography** only. In the next steps, we'll add **Post-Quantum Protection** using IKEv2 PPK.`,
   commands: {
-    r1: ['show crypto isakmp sa','show crypto ipsec sa','ping 10.0.2.1']
+    r1: ['show crypto ipsec profile','show crypto session','show crypto ipsec sa','ping 11.11.11.1']
   },
   validate:()=>isVPNTunnelUp(CELL_ID,'r1','r2')!==null,
   hints:[
     { detect:(dev,cmd)=>cmd.match(/^(show\s+crypto|ping)/i) && isVPNTunnelUp(CELL_ID,'r1','r2')===null,
-      message:'The VPN tunnel is not up yet. Make sure you completed Steps 3-6 on <strong>both</strong> R1 and R2.', type:'warning' },
+      message:'The VPN tunnel is not up yet. Make sure you completed Steps 3-6 on <strong>both</strong> R1 and R2, including the Tunnel0 interface and static routes via Tunnel0.', type:'warning' },
   ]
 },
 
@@ -732,7 +752,7 @@ Create an IKEv2 keyring containing a peer definition with a **Manual PPK**. This
 configure terminal
 crypto ikev2 keyring PQC-KEYRING
  peer R2-PEER
-  address 192.168.12.2
+  address 11.11.11.1
   pre-shared-key cisco123
   ppk manual id QSafe-PPK-2026 key PQCsecretKey!2026 required
   exit
@@ -744,7 +764,7 @@ crypto ikev2 keyring PQC-KEYRING
 configure terminal
 crypto ikev2 keyring PQC-KEYRING
  peer R1-PEER
-  address 192.168.12.1
+  address 10.10.10.1
   pre-shared-key cisco123
   ppk manual id QSafe-PPK-2026 key PQCsecretKey!2026 required
   exit
@@ -760,8 +780,8 @@ crypto ikev2 keyring PQC-KEYRING
 
 > **Important:** The PPK ID is sent over the wire during IKE_AUTH. The actual key is **never** transmitted — it is used only for local key derivation.`,
   commands: {
-    r1: ['configure terminal','crypto ikev2 keyring PQC-KEYRING','peer R2-PEER','address 192.168.12.2','pre-shared-key cisco123','ppk manual id QSafe-PPK-2026 key PQCsecretKey!2026 required','exit','exit','end'],
-    r2: ['configure terminal','crypto ikev2 keyring PQC-KEYRING','peer R1-PEER','address 192.168.12.1','pre-shared-key cisco123','ppk manual id QSafe-PPK-2026 key PQCsecretKey!2026 required','exit','exit','end']
+    r1: ['configure terminal','crypto ikev2 keyring PQC-KEYRING','peer R2-PEER','address 11.11.11.1','pre-shared-key cisco123','ppk manual id QSafe-PPK-2026 key PQCsecretKey!2026 required','exit','exit','end'],
+    r2: ['configure terminal','crypto ikev2 keyring PQC-KEYRING','peer R1-PEER','address 10.10.10.1','pre-shared-key cisco123','ppk manual id QSafe-PPK-2026 key PQCsecretKey!2026 required','exit','exit','end']
   },
   validate:()=>{
     const d1=iosDevices[CELL_ID+'_r1'], d2=iosDevices[CELL_ID+'_r2'];
@@ -787,12 +807,12 @@ crypto ikev2 keyring PQC-KEYRING
   type:'config', part:'pqc', router:'both',
   instruction:`### Step 10 — IKEv2 Profile with PPK
 
-Create an IKEv2 profile that defines authentication and links to the PPK keyring.
+Create an IKEv2 profile that defines authentication and links to the PPK keyring. This profile is referenced by the IPSec profile configured in Step 5.
 
 #### On R1:
 \`\`\`
-crypto ikev2 profile PQC-PROFILE
- match identity remote address 192.168.12.2
+crypto ikev2 profile PQC-IKE-PROFILE
+ match identity remote address 11.11.11.1
  authentication local pre-share key cisco123
  authentication remote pre-share key cisco123
  keyring ppk PQC-KEYRING
@@ -801,8 +821,8 @@ crypto ikev2 profile PQC-PROFILE
 
 #### On R2:
 \`\`\`
-crypto ikev2 profile PQC-PROFILE
- match identity remote address 192.168.12.1
+crypto ikev2 profile PQC-IKE-PROFILE
+ match identity remote address 10.10.10.1
  authentication local pre-share key cisco123
  authentication remote pre-share key cisco123
  keyring ppk PQC-KEYRING
@@ -814,15 +834,15 @@ crypto ikev2 profile PQC-PROFILE
 > - \`authentication local/remote pre-share key\` = IKEv2 peer authentication
 > - \`keyring ppk PQC-KEYRING\` = Links the PPK keyring for **quantum-safe key derivation**
 >
-> The \`keyring ppk\` command is what makes IKEv2 mix the PPK into session key derivation per RFC 8784.`,
+> The \`keyring ppk\` command is what makes IKEv2 mix the PPK into session key derivation per RFC 8784. The IKEv2 profile is linked to the tunnel via the IPSec profile (Step 5), not via a crypto map.`,
   commands: {
-    r1: ['configure terminal','crypto ikev2 profile PQC-PROFILE','match identity remote address 192.168.12.2','authentication local pre-share key cisco123','authentication remote pre-share key cisco123','keyring ppk PQC-KEYRING','exit','end'],
-    r2: ['configure terminal','crypto ikev2 profile PQC-PROFILE','match identity remote address 192.168.12.1','authentication local pre-share key cisco123','authentication remote pre-share key cisco123','keyring ppk PQC-KEYRING','exit','end']
+    r1: ['configure terminal','crypto ikev2 profile PQC-IKE-PROFILE','match identity remote address 11.11.11.1','authentication local pre-share key cisco123','authentication remote pre-share key cisco123','keyring ppk PQC-KEYRING','exit','end'],
+    r2: ['configure terminal','crypto ikev2 profile PQC-IKE-PROFILE','match identity remote address 10.10.10.1','authentication local pre-share key cisco123','authentication remote pre-share key cisco123','keyring ppk PQC-KEYRING','exit','end']
   },
   validate:()=>{
     const d1=iosDevices[CELL_ID+'_r1'], d2=iosDevices[CELL_ID+'_r2'];
     if(!d1||!d2) return false;
-    const p1=d1.crypto.ikev2Profiles['PQC-PROFILE'], p2=d2.crypto.ikev2Profiles['PQC-PROFILE'];
+    const p1=d1.crypto.ikev2Profiles['PQC-IKE-PROFILE'], p2=d2.crypto.ikev2Profiles['PQC-IKE-PROFILE'];
     return !!(p1?.keyringPpk==='PQC-KEYRING' && p2?.keyringPpk==='PQC-KEYRING' && p1.authLocal && p2.authLocal);
   },
   hints:[
@@ -860,11 +880,11 @@ show crypto ikev2 profile
 > Shows the profile with the linked PPK keyring.
 
 \`\`\`
-ping 10.0.2.1
+ping 11.11.11.1
 \`\`\`
 > Traffic is now encrypted with **quantum-resistant** session keys!`,
   commands: {
-    r1: ['show crypto ikev2 sa detailed','show crypto ikev2 keyring','show crypto ikev2 profile','ping 10.0.2.1']
+    r1: ['show crypto ikev2 sa detailed','show crypto ikev2 keyring','show crypto ikev2 profile','ping 11.11.11.1']
   },
   validate:()=>checkPPKStatus(CELL_ID,'r1','r2')!==null,
   hints:[
@@ -885,26 +905,28 @@ Oh no! Something broke. The VPN tunnel is **down**.
 
 #### Useful diagnostic commands:
 \`\`\`
-show crypto map
-show crypto isakmp sa
-show crypto isakmp policy
-show access-lists
+show crypto ipsec profile
+show crypto session
+show interfaces Tunnel0
+show ip route
 \`\`\`
 
-> **Hint:** Compare the output of \`show crypto map\` on **both** R1 and R2. Look at which interfaces have the crypto map applied.
+> **Hint:** Check R2's Tunnel0 interface configuration. Compare with R1 — is the tunnel protection applied?
 
-Fix the issue and verify the tunnel comes back up with \`ping 10.0.2.1\` from R1.`,
+Fix the issue and verify the tunnel comes back up with \`ping 11.11.11.1\` from R1.`,
   validate:()=>isVPNTunnelUp(CELL_ID,'r1','r2')!==null,
   onActivate:()=>{
-    // Inject fault: remove crypto map from R2's Serial0/0/0
+    // Inject fault: remove tunnel protection from R2's Tunnel0
     const d2=iosDevices[CELL_ID+'_r2'];
-    if(d2) delete d2.crypto.appliedCryptoMap['Serial0/0/0'];
+    if(d2 && d2.interfaces['Tunnel0']?.tunnelConfig) {
+      delete d2.interfaces['Tunnel0'].tunnelConfig.ipsecProfile;
+    }
   },
   hints:[
-    { detect:(dev,cmd)=>cmd.match(/show\s+crypto\s+map/i) && dev._rKey==='r2' && !iosDevices[CELL_ID+'_r2']?.crypto.appliedCryptoMap['Serial0/0/0'],
-      message:'Notice that R2\'s crypto map is <strong>not applied</strong> to any interface. Try: <code>interface Serial0/0/0</code> then <code>crypto map PQC-MAP</code>.', type:'nudge' },
-    { detect:(dev,cmd)=>cmd.match(/ping\s+10\.0\.2\.1/i) && isVPNTunnelUp(CELL_ID,'r1','r2')===null,
-      message:'The tunnel is still down. Check R2\'s crypto map application.', type:'warning' },
+    { detect:(dev,cmd)=>cmd.match(/show\s+(interfaces\s+Tunnel0|crypto\s+ipsec\s+profile|crypto\s+session)/i) && dev._rKey==='r2' && !iosDevices[CELL_ID+'_r2']?.interfaces['Tunnel0']?.tunnelConfig?.ipsecProfile,
+      message:'Notice that R2\'s Tunnel0 is missing <strong>tunnel protection</strong>. Try: <code>interface Tunnel0</code> then <code>tunnel protection ipsec profile PQC-IPSEC-PROFILE</code>.', type:'nudge' },
+    { detect:(dev,cmd)=>cmd.match(/ping\s+11\.11\.11\.1/i) && isVPNTunnelUp(CELL_ID,'r1','r2')===null,
+      message:'The tunnel is still down. Check R2\'s Tunnel0 tunnel protection configuration.', type:'warning' },
   ]
 },
 
@@ -961,7 +983,7 @@ Verify with \`show crypto ikev2 sa detailed\` — you should see "Quantum-safe E
   type:'info', part:'verify', router:null,
   instruction:`### Congratulations! Tutorial Complete!
 
-You have successfully configured a **Quantum-Safe IPSec VPN** using Post-Quantum Pre-shared Keys (PPK) on Cisco IOS XE routers.
+You have successfully configured a **Quantum-Safe IPSec VPN** using Post-Quantum Pre-shared Keys (PPK) and **Virtual Tunnel Interfaces (VTI)** on Cisco IOS XE routers.
 
 #### What You Accomplished:
 
@@ -969,8 +991,18 @@ You have successfully configured a **Quantum-Safe IPSec VPN** using Post-Quantum
 |---|---|
 | IKEv2 Proposal & Policy | AES-CBC-256 + SHA-256 + DH Group 16 |
 | IPSec Transform | ESP-AES-256 + SHA-256-HMAC |
+| IPSec Profile | Links transform set + IKEv2 profile |
+| Virtual Tunnel Interface | Routing-based encryption via Tunnel0 |
 | IKEv2 PPK Keyring | Manual PPK with \`required\` flag |
 | IKEv2 Profile | Authentication + \`keyring ppk\` for quantum resistance |
+
+#### Why VTI Instead of Crypto Maps?
+
+Cisco has declared crypto maps **End-of-Life**. VTI (Virtual Tunnel Interface) is the modern standard because:
+- **Routing-based encryption** — traffic encrypted by routing, not ACL matching
+- **Supports dynamic routing** — run OSPF, BGP, or EIGRP over the tunnel
+- **Simpler configuration** — no crypto ACLs or crypto map entries needed
+- **Better scalability** — each tunnel is a routable interface with its own IP
 
 #### Best Practices for Production Deployment:
 
@@ -990,6 +1022,8 @@ You have successfully configured a **Quantum-Safe IPSec VPN** using Post-Quantum
 5. **Monitor:** Regularly verify quantum resistance with:
    \`\`\`
    show crypto ikev2 sa detailed
+   show crypto ipsec profile
+   show crypto session
    \`\`\`
 
 #### Official Cisco Documentation:
@@ -1699,15 +1733,16 @@ const CMD_LEARN_LINKS = {
   'crypto ipsec transform-set': { url: 'https://www.cisco.com/c/en/us/td/docs/routers/sdwan/command/iosxe/qualified-cli-command-reference-guide/m-crypto-commands.html#GUID-87B63BB3-A17F-4730-8972-EA9CEFBA414D', label: 'Cisco Crypto Cmd Ref — crypto ipsec transform-set' },
   'mode':                        { url: 'https://www.cisco.com/c/en/us/td/docs/routers/asr920/configuration/guide/sec_vpn/17-1-1/b-sec-ipsec-xe-17-1-asr920/b-sec-ipsec-xe-17-1-asr920_chapter_01.html', label: 'Cisco IOS XE 17 — Transform Set Mode' },
 
-  // Step 5: ACL — deep-linked to extended ACL creation section
-  'access-list':      { url: 'https://www.cisco.com/c/en/us/td/docs/routers/ios/config/17-x/sec-vpn/b-security-vpn/m_sec-create-ip-apply-0.html#GUID-9B178E56-F2AE-4910-9774-BBA30C85B179', label: 'Cisco IOS XE 17.x — Creating Extended ACLs' },
-
-  // Step 6: Crypto Map — deep-linked to crypto map creation sections
-  'crypto map':       { url: 'https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/sec_conn_vpnips/configuration/xe-17/sec-sec-for-vpns-w-ipsec-xe-17-book/sec-cfg-vpn-ipsec.html#GUID-3ED7166F-F328-4229-A4B6-D08C0C103E3B', label: 'Cisco IOS XE 17 — Creating Static Crypto Maps' },
-  'set peer':         { url: 'https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/security/s1/sec-s1-cr-book/sec-cr-s2.html#wp1966957785', label: 'Cisco Security Cmd Ref — set peer' },
+  // Step 5: IPSec Profile — deep-linked to IPSec profile sections
+  'crypto ipsec profile': { url: 'https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/sec_conn_vpnips/configuration/xe-17/sec-sec-for-vpns-w-ipsec-xe-17-book/sec-cfg-vpn-ipsec.html', label: 'Cisco IOS XE 17 — Configuring IPSec Profiles' },
   'set transform-set':{ url: 'https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/security/s1/sec-s1-cr-book/sec-cr-s2.html#wp1098411242', label: 'Cisco Security Cmd Ref — set transform-set' },
-  'set ikev2-profile': { url: 'https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/sec_conn_ike2vpn/configuration/xe-3s/sec-flex-vpn-xe-3s-book/sec-apx-ikev2-legacy.html', label: 'Cisco: IKEv2 Legacy Crypto Maps — set ikev2-profile' },
-  'match address':    { url: 'https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/sec_conn_vpnips/configuration/xe-17/sec-sec-for-vpns-w-ipsec-xe-17-book/sec-cfg-vpn-ipsec.html#GUID-3ED7166F-F328-4229-A4B6-D08C0C103E3B', label: 'Cisco IOS XE 17 — Static Crypto Map (match address)' },
+  'set ikev2-profile': { url: 'https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/sec_conn_ike2vpn/configuration/xe-3s/sec-flex-vpn-xe-3s-book/sec-apx-ikev2-legacy.html', label: 'Cisco: IKEv2 Profile in IPSec Profile — set ikev2-profile' },
+
+  // Step 6: VTI — deep-linked to tunnel interface sections
+  'tunnel source':      { url: 'https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/interface/command/ir-cr-book/ir-t2.html', label: 'Cisco Interface Cmd Ref — tunnel source' },
+  'tunnel destination': { url: 'https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/interface/command/ir-cr-book/ir-t2.html', label: 'Cisco Interface Cmd Ref — tunnel destination' },
+  'tunnel mode':        { url: 'https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/interface/command/ir-cr-book/ir-t2.html', label: 'Cisco Interface Cmd Ref — tunnel mode' },
+  'tunnel protection':  { url: 'https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/sec_conn_vpnips/configuration/xe-17/sec-sec-for-vpns-w-ipsec-xe-17-book/sec-cfg-vpn-ipsec.html', label: 'Cisco IOS XE 17 — tunnel protection ipsec profile' },
 
   // CLI response messages
   '%link':             { url: 'https://www.cisco.com/c/en/us/td/docs/routers/access/wireless/software/guide/SysMsgLogging.html', label: 'Cisco: System Message Logging' },
@@ -1861,23 +1896,25 @@ const CMD_EXPLANATIONS = [
   { match: /^mode\s+(tunnel|transport)/i,
     text: (cmd) => { const m = cmd.match(/mode\s+(\S+)/i)[1]; return m==='tunnel' ? '<strong>Sets encapsulation to tunnel mode.</strong> The entire original IP packet is encrypted and wrapped in a new IP header. Used for site-to-site VPNs where the endpoints are different from the protected hosts.' : '<strong>Sets encapsulation to transport mode.</strong> Only the payload is encrypted; the original IP header is preserved. Used for host-to-host encryption.'; } },
 
-  // Step 5: Crypto ACL
-  { match: /^access-list\s+(\d+)\s+permit\s+ip\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)/i,
-    text: (cmd) => { const m = cmd.match(/access-list\s+(\d+)\s+permit\s+ip\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)/i); return `<strong>Defines "interesting traffic"</strong> for VPN encryption. ACL <code>${m[1]}</code> matches IP packets from <code>${m[2]}</code> (wildcard <code>${m[3]}</code>) to <code>${m[4]}</code> (wildcard <code>${m[5]}</code>). Only traffic matching this ACL will be encrypted through the IPSec tunnel.`; } },
-
-  // Step 6: Crypto Map
-  { match: /^crypto\s+map\s+(\S+)\s+(\d+)\s+ipsec-isakmp/i,
-    text: (cmd) => { const m = cmd.match(/crypto\s+map\s+(\S+)\s+(\d+)/i); return `<strong>Creates crypto map <code>${m[1]}</code></strong> with sequence <code>${m[2]}</code>. The crypto map ties together the peer address, transform set, IKEv2 profile, and ACL into a single VPN policy that can be applied to an interface.`; } },
-  { match: /^set\s+peer\s+(\S+)/i,
-    text: (cmd) => { const ip = cmd.match(/set\s+peer\s+(\S+)/i)[1]; return `<strong>Sets the VPN peer address</strong> to <code>${ip}</code>. This is the remote router's WAN IP that this crypto map will build the IPSec tunnel to.`; } },
+  // Step 5: IPSec Profile
+  { match: /^crypto\s+ipsec\s+profile\s+(\S+)/i,
+    text: (cmd) => { const name = cmd.match(/crypto\s+ipsec\s+profile\s+(\S+)/i)[1]; return `<strong>Creates IPSec profile <code>${name}</code></strong>. An IPSec profile bundles the transform set and IKEv2 profile into a reusable encryption policy. It is the modern replacement for crypto maps — applied to tunnel interfaces via <code>tunnel protection</code> instead of to physical interfaces.`; } },
   { match: /^set\s+transform-set\s+(\S+)/i,
-    text: (cmd) => { const name = cmd.match(/set\s+transform-set\s+(\S+)/i)[1]; return `<strong>Links transform set <code>${name}</code></strong> to this crypto map. The transform set defines the ESP encryption and integrity algorithms used for the actual data traffic.`; } },
+    text: (cmd) => { const name = cmd.match(/set\s+transform-set\s+(\S+)/i)[1]; return `<strong>Links transform set <code>${name}</code></strong> to this IPSec profile. The transform set defines the ESP encryption and integrity algorithms used for the actual data traffic.`; } },
   { match: /^set\s+ikev2-profile\s+(\S+)/i,
-    text: (cmd) => { const name = cmd.match(/set\s+ikev2-profile\s+(\S+)/i)[1]; return `<strong>Binds IKEv2 profile <code>${name}</code></strong> to this crypto map. This links the PPK quantum-safe configuration to the IPSec tunnel, enabling post-quantum key derivation via RFC 8784.`; } },
-  { match: /^match\s+address\s+(\d+)/i,
-    text: (cmd) => { const acl = cmd.match(/match\s+address\s+(\d+)/i)[1]; return `<strong>Matches traffic using ACL <code>${acl}</code>.</strong> Only packets matching this access list will be encrypted and sent through the VPN tunnel. Non-matching traffic passes unencrypted.`; } },
-  { match: /^crypto\s+map\s+(\S+)\s*$/i,
-    text: (cmd) => { const name = cmd.match(/crypto\s+map\s+(\S+)/i)[1]; return `<strong>Applies crypto map <code>${name}</code></strong> to this interface. All outgoing traffic on this interface will be checked against the crypto map's ACL, and matching packets will be encrypted through the VPN tunnel.`; } },
+    text: (cmd) => { const name = cmd.match(/set\s+ikev2-profile\s+(\S+)/i)[1]; return `<strong>Binds IKEv2 profile <code>${name}</code></strong> to this IPSec profile. This links the PPK quantum-safe configuration to the IPSec tunnel, enabling post-quantum key derivation via RFC 8784.`; } },
+
+  // Step 6: VTI (Virtual Tunnel Interface)
+  { match: /^interface\s+Tunnel\s*(\d+)/i,
+    text: (cmd) => { const num = cmd.match(/Tunnel\s*(\d+)/i)[1]; return `<strong>Enters configuration mode for Virtual Tunnel Interface <code>Tunnel${num}</code>.</strong> VTI is the modern replacement for crypto maps — it provides a routable interface for IPSec encryption. Any traffic routed into this interface is automatically encrypted.`; } },
+  { match: /^tunnel\s+source\s+(\S+)/i,
+    text: (cmd) => { const src = cmd.match(/tunnel\s+source\s+(\S+)/i)[1]; return `<strong>Sets the tunnel source</strong> to <code>${src}</code>. This is the local interface (or IP) used as the outer source address for encapsulated tunnel packets. The tunnel endpoint IP must be reachable by the remote peer.`; } },
+  { match: /^tunnel\s+destination\s+(\S+)/i,
+    text: (cmd) => { const dst = cmd.match(/tunnel\s+destination\s+(\S+)/i)[1]; return `<strong>Sets the tunnel destination</strong> to <code>${dst}</code>. This is the remote peer's IP address used as the outer destination for encapsulated packets. Must be reachable via the routing table.`; } },
+  { match: /^tunnel\s+mode\s+ipsec\s+ipv4/i,
+    text: '<strong>Sets tunnel encapsulation to IPSec tunnel mode (IPv4).</strong> This enables native IPSec encapsulation on the tunnel interface — packets entering the tunnel are encrypted using ESP. This is more efficient than GRE+IPSec because it avoids the GRE overhead.' },
+  { match: /^tunnel\s+protection\s+ipsec\s+profile\s+(\S+)/i,
+    text: (cmd) => { const name = cmd.match(/profile\s+(\S+)/i)[1]; return `<strong>Applies IPSec profile <code>${name}</code></strong> to this tunnel interface. This links the encryption parameters (transform set and IKEv2 profile) to the VTI. All traffic routed through this tunnel will be encrypted using the algorithms defined in the profile.`; } },
 
   // Step 7 & 11: Show commands
   { match: /^show\s+crypto\s+isakmp\s+sa$/i,
@@ -1898,8 +1935,12 @@ const CMD_EXPLANATIONS = [
     text: '<strong>Displays IKEv2 profiles.</strong> Shows match criteria, authentication method, and keyring bindings (<code>keyring local</code> for auth, <code>keyring ppk</code> for quantum resistance). Verify both are configured.' },
   { match: /^show\s+crypto\s+isakmp\s+policy$/i,
     text: '<strong>Displays ISAKMP policies.</strong> Shows all configured protection suites with their priority, encryption, hash, authentication method, DH group, and lifetime.' },
+  { match: /^show\s+crypto\s+ipsec\s+profile$/i,
+    text: '<strong>Displays IPSec profile configuration.</strong> Shows all IPSec profiles with their transform set, IKEv2 profile, and SA lifetime settings. Profiles are applied to tunnel interfaces via <code>tunnel protection</code>.' },
+  { match: /^show\s+crypto\s+session$/i,
+    text: '<strong>Displays active crypto sessions.</strong> Shows VPN tunnel status (UP-ACTIVE/DOWN), local and remote addresses, and the interface used. Quick way to verify tunnel health.' },
   { match: /^show\s+crypto\s+map$/i,
-    text: '<strong>Displays crypto map configuration.</strong> Shows all crypto map entries with their peer, transform set, ACL, and which interfaces they are applied to.' },
+    text: '<strong>Displays crypto map configuration (legacy).</strong> Shows crypto map entries with their peer, transform set, and ACL. Note: crypto maps are deprecated in favor of IPSec profiles with VTI.' },
   { match: /^show\s+crypto\s+transform-set$/i,
     text: '<strong>Displays IPSec transform sets.</strong> Shows configured transform sets with their ESP encryption and authentication algorithms, and negotiation mode (tunnel/transport).' },
   { match: /^show\s+access-lists$/i,
@@ -2245,7 +2286,7 @@ const CMD_EXPLANATIONS = [
   { match: /^\d+\s+(permit|deny)\s+ip\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)/i,
     text: (msg) => { const m = msg.match(/(\d+)\s+(permit|deny)\s+ip\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)/i); return m ? `<strong>ACL entry #${m[1]}: <code>${m[2]}</code> IP traffic</strong> from <code>${m[3]}</code> (wildcard <code>${m[4]}</code>) to <code>${m[5]}</code> (wildcard <code>${m[6]}</code>).<br>` +
       `Wildcard mask works opposite to subnet mask: 0 bits must match, 1 bits are ignored. E.g., <code>0.0.0.255</code> matches any host in that /24 network.<br>` +
-      `When used as a <strong>crypto ACL</strong>, "permit" means <em>encrypt</em> matching traffic through the VPN tunnel — it does not permit/deny forwarding.` : '<strong>ACL entry.</strong> Defines which traffic to permit or deny (or encrypt, when used with a crypto map).'; } },
+      `When used as a <strong>crypto ACL</strong> (legacy), "permit" means <em>encrypt</em> matching traffic through the VPN tunnel — it does not permit/deny forwarding.` : '<strong>ACL entry.</strong> Defines which traffic to permit or deny.'; } },
 
   // ─── show crypto isakmp policy output lines ───
   { match: /^Global IKE policy/i,
@@ -2279,9 +2320,9 @@ const CMD_EXPLANATIONS = [
 
   // ─── show crypto ipsec sa output lines ───
   { match: /^\s*interface:\s+(\S+)/i,
-    text: (msg) => { const iface = msg.match(/interface:\s+(\S+)/i)[1]; return `<strong>Crypto interface: <code>${iface}</code>.</strong> This is the physical interface where the crypto map is applied. All traffic entering/exiting this interface is evaluated against the crypto ACL to determine if it should be encrypted/decrypted through the VPN tunnel.`; } },
+    text: (msg) => { const iface = msg.match(/interface:\s+(\S+)/i)[1]; return `<strong>Crypto interface: <code>${iface}</code>.</strong> This is the interface where IPSec encryption is active. For VTI-based VPNs, this is the Tunnel interface. All traffic routed through this interface is encrypted/decrypted.`; } },
   { match: /^Crypto map tag:\s+(\S+),\s+local addr\s+(\S+)/i,
-    text: (msg) => { const m = msg.match(/tag:\s+(\S+),\s+local addr\s+(\S+)/i); return `<strong>Crypto map <code>${m[1]}</code></strong> applied to this interface. <strong>Local address <code>${m[2]}</code></strong> is used as the tunnel source IP. This is the address the peer sees as the IKE/IPSec endpoint.`; } },
+    text: (msg) => { const m = msg.match(/tag:\s+(\S+),\s+local addr\s+(\S+)/i); return `<strong>Crypto map/profile <code>${m[1]}</code></strong> applied to this interface. <strong>Local address <code>${m[2]}</code></strong> is used as the tunnel source IP. This is the address the peer sees as the IKE/IPSec endpoint.`; } },
   { match: /^protected vrf:\s+\(none\)/i,
     text: '<strong>Protected VRF: (none).</strong> VRF (Virtual Routing and Forwarding) is not used — the VPN tunnel operates in the global routing table. In MPLS VPN or multi-tenant environments, each customer can have a separate VRF with isolated routing, and IPSec tunnels can protect traffic within a specific VRF.' },
   { match: /^local\s+ident\s+\(addr\/mask\/prot\/port\):\s+\((\S+)\/(\d+)\/(\d+)\)/i,
@@ -2291,7 +2332,7 @@ const CMD_EXPLANATIONS = [
   { match: /^current_peer\s+(\S+)\s+port\s+(\d+)/i,
     text: (msg) => { const m = msg.match(/current_peer\s+(\S+)\s+port\s+(\d+)/i); return `<strong>Current VPN peer: <code>${m[1]}</code>, port <code>${m[2]}</code>.</strong> Port 500 is standard IKE (ISAKMP). Port 4500 indicates NAT-Traversal is active (IKE/ESP packets are encapsulated in UDP to pass through NAT devices).`; } },
   { match: /^PERMIT, flags=\{origin_is_acl,\}/i,
-    text: '<strong>Traffic selector: PERMIT, origin is ACL.</strong> The IPSec proxy identity was derived from an access control list (the crypto ACL configured via <code>match address</code> in the crypto map). Traffic matching this ACL is encrypted; non-matching traffic passes in the clear.' },
+    text: '<strong>Traffic selector: PERMIT, origin is ACL.</strong> The IPSec proxy identity was derived from an access control list or tunnel routing. For VTI-based tunnels, traffic selection is driven by routing rather than ACLs.' },
   { match: /^#pkts encaps:\s+(\d+),\s+#pkts encrypt:\s+(\d+),\s+#pkts digest:\s+(\d+)/i,
     text: (msg) => { const m = msg.match(/encaps:\s+(\d+).*encrypt:\s+(\d+).*digest:\s+(\d+)/i); return `<strong>Outbound IPSec counters:</strong><br>` +
       `<strong>#pkts encaps: <code>${m[1]}</code></strong> — packets encapsulated (wrapped in ESP header, ready for encryption).<br>` +
@@ -2400,7 +2441,7 @@ const CMD_EXPLANATIONS = [
   { match: /^PPK ID:\s+(\S+)/i,
     text: (msg) => { const id = msg.match(/PPK ID:\s+(\S+)/i)[1]; return `<strong>PPK Identifier: <code>${id}</code>.</strong> This is the PPK ID that was negotiated between peers during IKE_AUTH. Both peers must have a matching PPK with this ID configured in their keyrings. The PPK itself (the actual key material) is never transmitted — only the ID is exchanged so both sides know which pre-positioned key to use.`; } },
   { match: /^No IKEv2 SA configured/i,
-    text: '<strong>No IKEv2 tunnels active.</strong> Either no crypto map is applied to any interface, or the IKEv2 negotiation has not occurred yet. Trigger the tunnel by sending "interesting traffic" that matches the crypto ACL (e.g., <code>ping</code> through the VPN).' },
+    text: '<strong>No IKEv2 tunnels active.</strong> Either no tunnel protection is applied to a VTI, or the IKEv2 negotiation has not occurred yet. Trigger the tunnel by sending traffic through the tunnel interface (e.g., <code>ping</code> the remote LAN).' },
 
   // ─── show crypto ikev2 keyring output lines ───
   { match: /^IKEv2 Keyring:\s+(\S+)/i,
@@ -2422,7 +2463,7 @@ const CMD_EXPLANATIONS = [
 
   // ─── show crypto ikev2 profile output lines ───
   { match: /^IKEv2 Profile:\s+(\S+)/i,
-    text: (msg) => { const name = msg.match(/:\s+(\S+)/i)[1]; return `<strong>IKEv2 Profile <code>${name}</code>.</strong> An IKEv2 profile is the central policy object that ties everything together: peer matching criteria, authentication method, authentication keyring, and PPK keyring. It is referenced by the crypto map to determine how to authenticate each peer.`; } },
+    text: (msg) => { const name = msg.match(/:\s+(\S+)/i)[1]; return `<strong>IKEv2 Profile <code>${name}</code>.</strong> An IKEv2 profile is the central policy object that ties everything together: peer matching criteria, authentication method, authentication keyring, and PPK keyring. It is referenced by the IPSec profile to determine how to authenticate each peer.`; } },
   { match: /^Match identity remote address:\s+(\S+)\s+(.*)/i,
     text: (msg) => { const m = msg.match(/address:\s+(\S+)\s+(\S+)/i); return `<strong>Match rule: remote address <code>${m[1]}</code> mask <code>${m[2]}</code>.</strong> When an IKEv2 initiation arrives, the router checks the source IP against this rule. If it matches, this profile's authentication settings are used. <code>255.255.255.255</code> = exact match (single host); broader masks allow ranges of peers.`; } },
   { match: /^Local authentication method:\s+(\S+)/i,
@@ -2448,7 +2489,7 @@ const CMD_EXPLANATIONS = [
   { match: /^No transform sets defined/i,
     text: '<strong>No IPSec transform sets configured.</strong> A transform set defines the ESP encryption and integrity algorithms for Phase 2. Create one with <code>crypto ipsec transform-set</code> before the VPN tunnel can encrypt data traffic.' },
   { match: /^No crypto maps configured/i,
-    text: '<strong>No crypto maps exist.</strong> A crypto map binds the peer address, transform set, and crypto ACL into a VPN policy. Create and apply one to an interface to enable IPSec encryption.' },
+    text: '<strong>No crypto maps exist.</strong> Crypto maps are legacy — use an IPSec profile with a Virtual Tunnel Interface (VTI) instead. Configure <code>crypto ipsec profile</code> and apply it to a Tunnel interface via <code>tunnel protection</code>.' },
   { match: /^No IKEv2 proposals configured/i,
     text: '<strong>No IKEv2 proposals exist.</strong> Configure <code>crypto ikev2 proposal</code> with encryption, integrity, and DH group algorithms to define what this router offers during IKEv2 negotiation.' },
   { match: /^No IKEv2 policies configured/i,
@@ -2458,7 +2499,7 @@ const CMD_EXPLANATIONS = [
   { match: /^No IKEv2 profiles configured/i,
     text: '<strong>No IKEv2 profiles exist.</strong> An IKEv2 profile ties together peer matching, authentication, and keyrings. Required for IKEv2-based VPN tunnels.' },
   { match: /^No crypto SA configured on any interface/i,
-    text: '<strong>No crypto SA on any interface.</strong> No crypto map has been applied to any interface, so no IPSec encryption is active. Apply a crypto map to the WAN interface with <code>crypto map &lt;name&gt;</code> in interface config mode.' },
+    text: '<strong>No crypto SA on any interface.</strong> No IPSec encryption is active. Ensure a VTI (Tunnel interface) is configured with <code>tunnel protection ipsec profile &lt;name&gt;</code> and traffic is being routed through the tunnel.' },
   { match: /^No access lists configured/i,
     text: '<strong>No access lists exist.</strong> For VPN, create an extended ACL to define the "interesting traffic" that should be encrypted through the tunnel.' },
   { match: /^No local users configured/i,
