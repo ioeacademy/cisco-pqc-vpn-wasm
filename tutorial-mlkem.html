@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Quantum-Safe VPN — IKEv2 PPK | Alpha 1.0</title>
+  <title>Quantum-Safe VPN — ML-KEM | Alpha 1.0</title>
   <script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
   <style>
@@ -40,7 +40,6 @@
     .topo-hotspot:hover { border-color: rgba(88,166,255,.5); }
     .topo-hotspot.active { border-color: #3fb950; box-shadow: 0 0 12px rgba(63,185,80,.35); }
 
-    /* -- Tunnel overlay -- */
     /* -- Tunnel overlay (SVG-based arc) -- */
     .tunnel-svg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; overflow: visible; }
     .tunnel-svg text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-weight: 600; text-anchor: middle; dominant-baseline: middle; }
@@ -292,7 +291,7 @@
   <a class="nav-home" href="index.html">&larr; Home</a>
   <div class="nav-sep"></div>
   <span class="tutorial-badge">Alpha 1.0</span>
-  <span class="nav-title">Quantum-Safe VPN &mdash; IKEv2 PPK (RFC 8784)</span>
+  <span class="nav-title">Quantum-Safe VPN &mdash; ML-KEM (FIPS 203)</span>
   <span class="nav-progress" id="nav-progress">0 / 14</span>
 </div>
 
@@ -334,16 +333,17 @@ const TOPO_LINKS = [
 ];
 </script>
 <script src="ios-engine-base.js?v=23"></script>
-<script src="ios-engine-extended.js?v=23"></script>
+<script src="ios-engine-extended-mlkem.js?v=23"></script>
 <!-- WASM engine upgrade (falls back to JS if WASM fails) -->
 <script src="dist/ios-engine.js"></script>
 <script src="js/ios-wasm-shim.js"></script>
 <script>
 /* =====================================================================
-   TUTORIAL STEPS DEFINITION — Post-Quantum Cryptography VPN
-   Based on Cisco IOS XE 17.x official documentation:
-   - RFC 8784: Mixing Preshared Keys in IKEv2 for Post-Quantum Security
-   - Cisco Configuring Quantum-Safe Encryption Using Postquantum Preshared Keys
+   TUTORIAL STEPS DEFINITION — Post-Quantum Cryptography VPN (ML-KEM Variant)
+   Based on:
+   - NIST FIPS 203: ML-KEM (Module-Lattice-Based Key-Encapsulation Mechanism)
+   - RFC 9370: Multiple Key Exchanges in IKEv2
+   - Cisco IOS XE Quantum-Safe WAN Security documentation
 ===================================================================== */
 const TUTORIAL_STEPS = [
 
@@ -355,7 +355,7 @@ const TUTORIAL_STEPS = [
 {
   title:'The Quantum Threat & PQC VPN Overview',
   type:'info', part:'base', router:null,
-  instruction:`### Welcome to the Post-Quantum VPN Tutorial
+  instruction:`### Welcome to the Post-Quantum VPN Tutorial (ML-KEM)
 
 **Why Post-Quantum Cryptography?**
 
@@ -363,16 +363,16 @@ Quantum computers threaten the cryptographic algorithms used in today's VPNs. Th
 
 > **"Harvest Now, Decrypt Later"** — Adversaries are capturing encrypted VPN traffic today to decrypt it once quantum computers become available. Your data needs protection *now*.
 
-**The Solution: Post-Quantum Pre-shared Keys (PPK)**
+**The Solution: ML-KEM Hybrid Key Exchange (FIPS 203)**
 
-Cisco IOS XE implements **RFC 8784** — an extension to IKEv2 that mixes an additional pre-shared key (PPK) into the session key derivation. Even if a quantum computer breaks the DH exchange, the traffic remains encrypted because the attacker cannot derive the session keys without the PPK.
+**FIPS 203 ML-KEM** (Module-Lattice-Based Key-Encapsulation Mechanism) is a NIST-standardized post-quantum algorithm. Using **RFC 9370** (Multiple Key Exchanges in IKEv2), Cisco IOS XE can perform a **hybrid key exchange** — combining classical ECDH with ML-KEM. Even if a quantum computer breaks the ECDH exchange, the ML-KEM shared secret keeps the session keys secure.
 
 #### What You'll Build:
 
 | Phase | Description |
 |---|---|
 | **Part 1** | Base connectivity & classical IPSec VPN |
-| **Part 2** | Add Post-Quantum PPK to make the VPN quantum-resistant |
+| **Part 2** | Add ML-KEM hybrid key exchange for quantum resistance |
 | **Part 3** | Verification & Troubleshooting |
 
 #### Network Topology:
@@ -382,7 +382,7 @@ Cisco IOS XE implements **RFC 8784** — an extension to IKEv2 that mixes an add
 | **R1** | 10.0.1.0/24 (gateway .1) | 192.168.12.1/30 |
 | **R2** | 10.0.2.0/24 (gateway .1) | 192.168.12.2/30 |
 
-> **Reference:** Based on [Cisco IOS XE 17.x — Configuring Quantum-Safe Encryption Using Postquantum Preshared Keys](https://www.cisco.com/c/en/us/td/docs/routers/ios/config/17-x/sec-vpn/b-security-vpn/m-sec-cfg-quantum-encryption-ppk.html)
+> **Reference:** Based on [NIST FIPS 203 — Module-Lattice-Based Key-Encapsulation Mechanism Standard](https://csrc.nist.gov/pubs/fips/203/final) and [RFC 9370 — Multiple Key Exchanges in IKEv2](https://www.rfc-editor.org/rfc/rfc9370.html)
 
 Click **Continue** when you are ready to begin.`,
   validate:()=>true, hints:[]
@@ -624,7 +624,7 @@ interface Serial0/0/0
 \`\`\`
 
 > - The crypto map links the peer, transform set, IKEv2 profile, and ACL
-> - \`set ikev2-profile\` binds the IKEv2 profile for PPK quantum-safe negotiation
+> - \`set ikev2-profile\` binds the IKEv2 profile for ML-KEM quantum-safe negotiation
 > - Must be **applied to the WAN interface** (Serial0/0/0) for encryption to take effect`,
   commands: {
     r1: ['configure terminal','crypto map PQC-MAP 10 ipsec-isakmp','set peer 192.168.12.2','set transform-set PQC-TRANSFORM','set ikev2-profile PQC-PROFILE','match address 101','exit','interface Serial0/0/0','crypto map PQC-MAP','exit','end'],
@@ -667,7 +667,7 @@ ping 10.0.2.1
 \`\`\`
 > You should see \`!!!!!\` — traffic is now encrypted through the VPN!
 
-> **Note:** The tunnel is currently using **classical cryptography** only. In the next steps, we'll add **Post-Quantum Protection** using IKEv2 PPK.`,
+> **Note:** The tunnel is currently using **classical cryptography** only. In the next steps, we'll add **Post-Quantum Protection** using ML-KEM hybrid key exchange.`,
   commands: {
     r1: ['show crypto isakmp sa','show crypto ipsec sa','ping 10.0.2.1']
   },
@@ -679,157 +679,157 @@ ping 10.0.2.1
 },
 
 /* ================================================================
-   PART 2: POST-QUANTUM CRYPTOGRAPHY — PPK Configuration
+   PART 2: POST-QUANTUM CRYPTOGRAPHY — ML-KEM Hybrid Key Exchange
 ================================================================ */
 
-/* -- Step 8: The Quantum Threat -- */
+/* -- Step 8: Understanding ML-KEM -- */
 {
-  title:'Understanding Post-Quantum PPK (RFC 8784)',
+  title:'Understanding ML-KEM (FIPS 203)',
   type:'info', part:'pqc', router:null,
-  instruction:`### Part 2 — Post-Quantum Pre-shared Keys
+  instruction:`### Part 2 — ML-KEM Hybrid Key Exchange
 
 Your VPN tunnel is working, but it is vulnerable to **quantum attacks**. Let's fix that.
 
-> **[RFC 8784](https://datatracker.ietf.org/doc/html/rfc8784)** defines how to mix Postquantum Preshared Keys (PPKs) into the IKEv2 key derivation process, making the resulting session keys quantum-resistant.
+> **[FIPS 203](https://csrc.nist.gov/pubs/fips/203/final)** defines **ML-KEM** (Module-Lattice-Based Key-Encapsulation Mechanism), a NIST-standardized post-quantum algorithm. Using **[RFC 9370](https://datatracker.ietf.org/doc/html/rfc9370)** (Multiple Key Exchanges in IKEv2), we perform a **hybrid key exchange** — combining classical ECDH with ML-KEM.
 
-#### How PPK Works in IKEv2:
+#### How ML-KEM Hybrid Key Exchange Works:
 
-1. Both peers are **pre-configured** with a PPK (shared out-of-band)
-2. During IKE_SA_INIT, the initiator signals PPK support via a \`USE_PPK\` notification
-3. During IKE_AUTH, the initiator sends the **PPK ID** (not the key itself)
-4. Both peers independently mix the PPK into the session key derivation ([RFC 8784 Section 6](https://datatracker.ietf.org/doc/html/rfc8784#section-6)):
-   - \`SK_d' = PRF+(SK_d, PPK)\`
-   - New encryption/integrity keys are derived from \`SK_d'\`
-5. If \`required\` is set, the tunnel **fails** if PPK cannot be negotiated
+1. During **IKE_SA_INIT**, a classical ECDH key exchange is performed (e.g., Group 21 / P-521)
+2. An **IKE_INTERMEDIATE** exchange follows ([RFC 9370 Section 2](https://datatracker.ietf.org/doc/html/rfc9370#section-2)), carrying the ML-KEM encapsulation:
+   - Initiator sends its ML-KEM **encapsulation key** (public key)
+   - Responder encapsulates a shared secret and returns the **ciphertext**
+   - Initiator decapsulates to recover the shared secret
+3. Both shared secrets (ECDH + ML-KEM) are **combined** into the final session keys ([RFC 9370 Section 2.2](https://datatracker.ietf.org/doc/html/rfc9370#section-2.2)):
+   - \`SKEYSEED = PRF(SK_d, SK_ecdh | SK_mlkem | Ni | Nr)\`
+4. If the ML-KEM \`pqc\` command is configured, both peers **must** support it — otherwise the tunnel fails (unless \`optional\` is specified)
 
-#### Two PPK Provisioning Methods:
+#### Why Hybrid (ECDH + ML-KEM)?
 
-| Method | Description |
+| Threat | Protection |
 |---|---|
-| **Manual PPK** | Administrator configures PPK on both peers (simpler, must rotate manually) |
-| **Dynamic PPK (SKIP)** | Keys imported from external quantum key source via Cisco SKIP protocol |
+| Quantum computer breaks ECDH | ML-KEM shared secret keeps session keys safe |
+| ML-KEM found vulnerable | Classical ECDH still protects the session |
+| Both attacked | Defense-in-depth — attacker must break **both** simultaneously |
 
-> **In this tutorial,** we'll configure **Manual PPK** — the most common starting point for quantum-safe VPN deployments.
+#### ML-KEM Parameter Sets (FIPS 203):
+
+| Parameter Set | Security Level | Public Key Size | Ciphertext Size |
+|---|---|---|---|
+| **ML-KEM-512** | 128-bit (NIST Level 1) | 800 bytes | 768 bytes |
+| **ML-KEM-768** | 192-bit (NIST Level 3) | 1,184 bytes | 1,088 bytes |
+| **ML-KEM-1024** | 256-bit (NIST Level 5) | 1,568 bytes | 1,568 bytes |
+
+> **In this tutorial,** we'll use **ML-KEM-768** — the recommended balance of security and performance.
 
 #### Supported Platforms:
-- Cisco ISR 1000 Series
 - Cisco Catalyst 8000V, 8300, 8500 Series
-- Cisco ASR 1000 Series
-- Requires **IOS XE 17.11.1a** or later
+- Requires **IOS XE 26.1.1** or later
 
-Click **Continue** to start configuring quantum-safe encryption.`,
+Click **Continue** to start configuring quantum-safe key exchange.`,
   validate:()=>true, hints:[]
 },
 
-/* -- Step 9: IKEv2 Keyring with PPK -- */
+/* -- Step 9: IKEv2 Proposal with ML-KEM -- */
 {
-  title:'Configure IKEv2 Keyring with PPK',
+  title:'Configure IKEv2 Proposal with ML-KEM',
   type:'config', part:'pqc', router:'both',
-  instruction:`### Step 9 — IKEv2 Keyring with Post-Quantum PPK
+  instruction:`### Step 9 — IKEv2 Proposal with ML-KEM Key Exchange
 
-Create an IKEv2 keyring containing a peer definition with a **Manual PPK**. This is the critical quantum-safe component.
+Create an IKEv2 proposal that includes the **ML-KEM-768** key exchange alongside classical ECDH. This is the critical quantum-safe component.
 
-#### On R1:
+#### On both R1 and R2:
 \`\`\`
 configure terminal
-crypto ikev2 keyring PQC-KEYRING
- peer R2-PEER
-  address 192.168.12.2
-  pre-shared-key cisco123
-  ppk manual id QSafe-PPK-2026 key PQCsecretKey!2026 required
-  exit
- exit
-\`\`\`
-
-#### On R2:
-\`\`\`
-configure terminal
-crypto ikev2 keyring PQC-KEYRING
- peer R1-PEER
-  address 192.168.12.1
-  pre-shared-key cisco123
-  ppk manual id QSafe-PPK-2026 key PQCsecretKey!2026 required
-  exit
+crypto ikev2 proposal PQC-PROPOSAL
+ encryption aes-cbc-256
+ integrity sha512
+ group 21
+ pqc mlkem768
  exit
 \`\`\`
 
 > **Command Breakdown:**
-> - \`pre-shared-key cisco123\` = IKEv2 peer authentication key
-> - \`ppk manual\` = Use a manually configured PPK
-> - \`id QSafe-PPK-2026\` = PPK identifier (**must match** on both peers)
-> - \`key PQCsecretKey!2026\` = The actual PPK value (**must match** on both peers)
-> - \`required\` = Tunnel **will not** establish without PPK (no fallback)
+> - \`encryption aes-cbc-256\` = AES-256 encryption for IKE SA
+> - \`integrity sha512\` = SHA-512 integrity check
+> - \`group 21\` = Classical ECDH with P-521 curve (the "traditional" half of hybrid)
+> - \`pqc mlkem768\` = **FIPS 203 ML-KEM-768** post-quantum KEM (the "quantum-safe" half)
+> - Add \`optional\` after the algorithm (e.g. \`pqc mlkem768 optional\`) to allow fallback to classical-only if the peer does not support ML-KEM.
 
-> **Important:** The PPK ID is sent over the wire during IKE_AUTH. The actual key is **never** transmitted — it is used only for local key derivation.`,
+> **Important:** The \`pqc\` command triggers an **IKE_INTERMEDIATE** exchange (RFC 9370) where the ML-KEM encapsulation occurs. Both peers must have matching \`pqc\` values.`,
   commands: {
-    r1: ['configure terminal','crypto ikev2 keyring PQC-KEYRING','peer R2-PEER','address 192.168.12.2','pre-shared-key cisco123','ppk manual id QSafe-PPK-2026 key PQCsecretKey!2026 required','exit','exit','end'],
-    r2: ['configure terminal','crypto ikev2 keyring PQC-KEYRING','peer R1-PEER','address 192.168.12.1','pre-shared-key cisco123','ppk manual id QSafe-PPK-2026 key PQCsecretKey!2026 required','exit','exit','end']
+    r1: ['configure terminal','crypto ikev2 proposal PQC-PROPOSAL','encryption aes-cbc-256','integrity sha512','group 21','pqc mlkem768','exit','end'],
+    r2: ['configure terminal','crypto ikev2 proposal PQC-PROPOSAL','encryption aes-cbc-256','integrity sha512','group 21','pqc mlkem768','exit','end']
   },
   validate:()=>{
     const d1=iosDevices[CELL_ID+'_r1'], d2=iosDevices[CELL_ID+'_r2'];
     if(!d1||!d2) return false;
-    const kr1=d1.crypto.ikev2Keyrings['PQC-KEYRING'], kr2=d2.crypto.ikev2Keyrings['PQC-KEYRING'];
-    if(!kr1||!kr2) return false;
-    const p1=Object.values(kr1.peers)[0], p2=Object.values(kr2.peers)[0];
-    return !!(p1?.ppk?.id && p2?.ppk?.id && p1.ppk.id===p2.ppk.id && p1.ppk.key===p2.ppk.key && p1.ppk.required && p2.ppk.required);
+    const p1=d1.crypto.ikev2Proposals['PQC-PROPOSAL'], p2=d2.crypto.ikev2Proposals['PQC-PROPOSAL'];
+    return !!(p1?.keyExchange==='mlkem768' && p2?.keyExchange==='mlkem768');
   },
   hints:[
-    { detect:(dev,cmd)=>cmd.match(/ppk\s+manual/i) && !cmd.match(/required/i),
-      message:'Don\'t forget the <code>required</code> keyword to enforce quantum-safe mode. Without it, the VPN can fall back to classical crypto.', type:'nudge' },
-    { detect:(dev,cmd)=>cmd.match(/ppk\s+manual.*key\s+(\S+)/i) && !cmd.match(/PQCsecretKey!2026/),
-      message:'The PPK key must match on both sides. Use <code>PQCsecretKey!2026</code>.', type:'warning' },
-    { detect:(dev,cmd)=>cmd.match(/ppk\s+manual.*id\s+(\S+)/i) && !cmd.match(/QSafe-PPK-2026/),
-      message:'The PPK ID must match on both sides. Use <code>QSafe-PPK-2026</code>.', type:'warning' },
+    { detect:(dev,cmd)=>cmd.match(/crypto\s+ikev2\s+proposal/i) && !cmd.match(/PQC-PROPOSAL/),
+      message:'Name the proposal <code>PQC-PROPOSAL</code> so the later steps can reference it.', type:'nudge' },
+    { detect:(dev,cmd)=>cmd.match(/pqc\s+(\S+)/i) && !cmd.match(/mlkem768/i),
+      message:'Use <code>pqc mlkem768</code> in the IKEv2 proposal for ML-KEM-768 (NIST Level 3 security).', type:'warning' },
   ]
 },
 
-/* -- Step 10: IKEv2 Profile -- */
+/* -- Step 10: IKEv2 Policy & Profile -- */
 {
-  title:'Configure IKEv2 Profile',
+  title:'Configure IKEv2 Policy & Profile',
   type:'config', part:'pqc', router:'both',
-  instruction:`### Step 10 — IKEv2 Profile with PPK
+  instruction:`### Step 10 — IKEv2 Policy and Profile
 
-Create an IKEv2 profile that defines authentication and links to the PPK keyring.
+Create an IKEv2 policy that references the ML-KEM proposal, and an IKEv2 profile for peer authentication.
 
 #### On R1:
 \`\`\`
+configure terminal
+crypto ikev2 policy PQC-POLICY
+ proposal PQC-PROPOSAL
+ exit
 crypto ikev2 profile PQC-PROFILE
  match identity remote address 192.168.12.2
  authentication local pre-share key cisco123
  authentication remote pre-share key cisco123
- keyring ppk PQC-KEYRING
  exit
+end
 \`\`\`
 
 #### On R2:
 \`\`\`
+configure terminal
+crypto ikev2 policy PQC-POLICY
+ proposal PQC-PROPOSAL
+ exit
 crypto ikev2 profile PQC-PROFILE
  match identity remote address 192.168.12.1
  authentication local pre-share key cisco123
  authentication remote pre-share key cisco123
- keyring ppk PQC-KEYRING
  exit
+end
 \`\`\`
 
 > **Key Commands:**
+> - \`proposal PQC-PROPOSAL\` = Links the policy to the ML-KEM-enabled proposal from Step 9
 > - \`match identity remote address\` = Which peer this profile applies to
 > - \`authentication local/remote pre-share key\` = IKEv2 peer authentication
-> - \`keyring ppk PQC-KEYRING\` = Links the PPK keyring for **quantum-safe key derivation**
 >
-> The \`keyring ppk\` command is what makes IKEv2 mix the PPK into session key derivation per RFC 8784.`,
+> **Note:** Unlike the PPK approach (RFC 8784), ML-KEM does not require a separate keyring or pre-distributed quantum key. The quantum-safe key material is generated algorithmically during each IKE negotiation.`,
   commands: {
-    r1: ['configure terminal','crypto ikev2 profile PQC-PROFILE','match identity remote address 192.168.12.2','authentication local pre-share key cisco123','authentication remote pre-share key cisco123','keyring ppk PQC-KEYRING','exit','end'],
-    r2: ['configure terminal','crypto ikev2 profile PQC-PROFILE','match identity remote address 192.168.12.1','authentication local pre-share key cisco123','authentication remote pre-share key cisco123','keyring ppk PQC-KEYRING','exit','end']
+    r1: ['configure terminal','crypto ikev2 policy PQC-POLICY','proposal PQC-PROPOSAL','exit','crypto ikev2 profile PQC-PROFILE','match identity remote address 192.168.12.2','authentication local pre-share key cisco123','authentication remote pre-share key cisco123','exit','end'],
+    r2: ['configure terminal','crypto ikev2 policy PQC-POLICY','proposal PQC-PROPOSAL','exit','crypto ikev2 profile PQC-PROFILE','match identity remote address 192.168.12.1','authentication local pre-share key cisco123','authentication remote pre-share key cisco123','exit','end']
   },
   validate:()=>{
     const d1=iosDevices[CELL_ID+'_r1'], d2=iosDevices[CELL_ID+'_r2'];
     if(!d1||!d2) return false;
-    const p1=d1.crypto.ikev2Profiles['PQC-PROFILE'], p2=d2.crypto.ikev2Profiles['PQC-PROFILE'];
-    return !!(p1?.keyringPpk==='PQC-KEYRING' && p2?.keyringPpk==='PQC-KEYRING' && p1.authLocal && p2.authLocal);
+    const pol1=d1.crypto.ikev2Policies['PQC-POLICY'], pol2=d2.crypto.ikev2Policies['PQC-POLICY'];
+    const prof1=d1.crypto.ikev2Profiles['PQC-PROFILE'], prof2=d2.crypto.ikev2Profiles['PQC-PROFILE'];
+    return !!(pol1?.proposals.includes('PQC-PROPOSAL') && pol2?.proposals.includes('PQC-PROPOSAL') && prof1?.authLocal && prof2?.authLocal);
   },
   hints:[
-    { detect:(dev,cmd)=>cmd.match(/keyring\s+ppk/i) && !cmd.match(/PQC-KEYRING/),
-      message:'The PPK keyring name should be <code>PQC-KEYRING</code> (matching Step 9).', type:'warning' },
+    { detect:(dev,cmd)=>cmd.match(/proposal\s+/i) && !cmd.match(/PQC-PROPOSAL/),
+      message:'Reference the proposal <code>PQC-PROPOSAL</code> from Step 9.', type:'warning' },
   ]
 },
 
@@ -843,35 +843,38 @@ crypto ikev2 profile PQC-PROFILE
   type:'config', part:'verify', router:'r1',
   instruction:`### Step 11 — Verify Quantum Resistance is Enabled
 
-Let's confirm the VPN tunnel is now **quantum-safe**.
+Let's confirm the VPN tunnel is now **quantum-safe** with ML-KEM.
 
 #### On R1, run:
 \`\`\`
 show crypto ikev2 sa detailed
 \`\`\`
-> Look for **"Quantum-safe Encryption using Manual PPK"** in the output. This confirms that PPK has been successfully mixed into the IKEv2 key derivation.
+> Look for **"PQC Key Exchange: ML-KEM-768"** and **"Quantum-safe Encryption using PQC: ML-KEM-768"** in the output. This confirms the hybrid key exchange was successful.
 
 \`\`\`
-show crypto ikev2 keyring
+show crypto ikev2 proposal
 \`\`\`
-> Shows the configured keyrings with peer addresses and PPK IDs. Verify the PPK ID matches on both sides.
+> Verify the proposal shows **"PQC: ML-KEM-768"**.
 
 \`\`\`
-show crypto ikev2 profile
+show crypto ikev2 policy
 \`\`\`
-> Shows the profile with the linked PPK keyring.
+> Confirms the policy is linked to the ML-KEM proposal.
 
 \`\`\`
 ping 10.0.2.1
 \`\`\`
-> Traffic is now encrypted with **quantum-resistant** session keys!`,
+> Traffic is now encrypted with **quantum-resistant** session keys derived from both ECDH and ML-KEM!`,
   commands: {
-    r1: ['show crypto ikev2 sa detailed','show crypto ikev2 keyring','show crypto ikev2 profile','ping 10.0.2.1']
+    r1: ['show crypto ikev2 sa detailed','show crypto ikev2 proposal','show crypto ikev2 policy','ping 10.0.2.1']
   },
-  validate:()=>checkPPKStatus(CELL_ID,'r1','r2')!==null,
+  validate:()=>{
+    const s = checkMLKEMStatus(CELL_ID,'r1','r2');
+    return s && s.algorithm;
+  },
   hints:[
-    { detect:(dev,cmd)=>cmd.match(/show\s+crypto\s+ikev2\s+sa/i) && checkPPKStatus(CELL_ID,'r1','r2')===null,
-      message:'PPK is not active. Make sure you configured the keyring and profile on <strong>both</strong> R1 and R2.', type:'warning' },
+    { detect:(dev,cmd)=>cmd.match(/show\s+crypto\s+ikev2\s+sa/i) && !(checkMLKEMStatus(CELL_ID,'r1','r2')?.algorithm),
+      message:'ML-KEM is not active. Make sure you configured the proposal with <code>pqc mlkem768</code> on <strong>both</strong> R1 and R2 (with <code>group 21</code> and <code>integrity sha512</code>).', type:'warning' },
   ]
 },
 
@@ -910,50 +913,51 @@ Fix the issue and verify the tunnel comes back up with \`ping 10.0.2.1\` from R1
   ]
 },
 
-/* -- Step 13: PPK Troubleshooting -- */
+/* -- Step 13: ML-KEM Troubleshooting -- */
 {
-  title:'PPK Troubleshooting Exercise',
+  title:'ML-KEM Troubleshooting Exercise',
   type:'config', part:'verify', router:'both',
-  instruction:`### Step 13 — PPK Troubleshooting
+  instruction:`### Step 13 — ML-KEM Troubleshooting
 
-The quantum-safe VPN is broken! Someone changed a PPK key on R2.
+The quantum-safe VPN is broken! Someone removed the ML-KEM key exchange from R2's proposal.
 
 > **Your task:** Use diagnostic commands to find the mismatch and fix it.
 
 #### Diagnostic commands:
 \`\`\`
 show crypto ikev2 sa detailed
-show crypto ikev2 keyring
+show crypto ikev2 proposal
 \`\`\`
 
-> **Hint:** Compare \`show crypto ikev2 keyring\` on **both** R1 and R2. The PPK IDs should match, but something is different on R2.
+> **Hint:** Compare \`show crypto ikev2 proposal\` on **both** R1 and R2. R1 has \`PQC: ML-KEM-768\`, but R2 is missing it.
 
-To fix, enter R2's keyring peer config and restore the correct PPK:
+To fix, enter R2's proposal and restore the ML-KEM key exchange:
 \`\`\`
 configure terminal
-crypto ikev2 keyring PQC-KEYRING
- peer R1-PEER
-  ppk manual id QSafe-PPK-2026 key PQCsecretKey!2026 required
-  exit
+crypto ikev2 proposal PQC-PROPOSAL
+ pqc mlkem768
  exit
 end
 \`\`\`
 
-Verify with \`show crypto ikev2 sa detailed\` — you should see "Quantum-safe Encryption using Manual PPK" again.`,
-  validate:()=>checkPPKStatus(CELL_ID,'r1','r2')!==null,
+Verify with \`show crypto ikev2 sa detailed\` — you should see "Quantum-safe Encryption using PQC: ML-KEM-768" again.`,
+  validate:()=>{
+    const s = checkMLKEMStatus(CELL_ID,'r1','r2');
+    return s && s.algorithm;
+  },
   onActivate:()=>{
-    // Inject fault: mismatch PPK key on R2
+    // Inject fault: remove key-exchange from R2's proposal
     const d2=iosDevices[CELL_ID+'_r2'];
     if(d2) {
-      const kr=d2.crypto.ikev2Keyrings['PQC-KEYRING'];
-      if(kr) { const peer=Object.values(kr.peers)[0]; if(peer?.ppk) peer.ppk.key='WrongKey999'; }
+      const prop=d2.crypto.ikev2Proposals['PQC-PROPOSAL'];
+      if(prop) prop.keyExchange=null;
     }
   },
   hints:[
-    { detect:(dev,cmd)=>cmd.match(/show\s+crypto\s+ikev2\s+keyring/i) && dev._rKey==='r2',
-      message:'Compare the PPK key with R1\'s keyring. The keys <strong>must</strong> be identical for quantum-safe operation.', type:'nudge' },
-    { detect:(dev,cmd)=>cmd.match(/show\s+crypto\s+ikev2\s+sa/i) && checkPPKStatus(CELL_ID,'r1','r2')===null,
-      message:'Quantum Resistance is not enabled. The PPK keys don\'t match between R1 and R2. Fix R2\'s PPK key.', type:'warning' },
+    { detect:(dev,cmd)=>cmd.match(/show\s+crypto\s+ikev2\s+proposal/i) && dev._rKey==='r2',
+      message:'Notice R2\'s proposal is <strong>missing</strong> the PQC line. Add it back with <code>pqc mlkem768</code>.', type:'nudge' },
+    { detect:(dev,cmd)=>cmd.match(/show\s+crypto\s+ikev2\s+sa/i) && !(checkMLKEMStatus(CELL_ID,'r1','r2')?.algorithm),
+      message:'Quantum Resistance is not enabled. R2\'s proposal is missing <code>pqc mlkem768</code>.', type:'warning' },
   ]
 },
 
@@ -963,41 +967,46 @@ Verify with \`show crypto ikev2 sa detailed\` — you should see "Quantum-safe E
   type:'info', part:'verify', router:null,
   instruction:`### Congratulations! Tutorial Complete!
 
-You have successfully configured a **Quantum-Safe IPSec VPN** using Post-Quantum Pre-shared Keys (PPK) on Cisco IOS XE routers.
+You have successfully configured a **Quantum-Safe IPSec VPN** using **FIPS 203 ML-KEM** hybrid key exchange on Cisco IOS XE routers.
 
 #### What You Accomplished:
 
 | Step | Configuration |
 |---|---|
-| IKEv2 Proposal & Policy | AES-CBC-256 + SHA-256 + DH Group 16 |
+| IKEv2 Proposal | AES-CBC-256 + SHA-256 + ECDH Group 21 + **ML-KEM-768** |
 | IPSec Transform | ESP-AES-256 + SHA-256-HMAC |
-| IKEv2 PPK Keyring | Manual PPK with \`required\` flag |
-| IKEv2 Profile | Authentication + \`keyring ppk\` for quantum resistance |
+| IKEv2 Policy | Links to ML-KEM-enabled proposal |
+| IKEv2 Profile | Peer authentication with pre-shared key |
+| **Key Exchange** | **Hybrid: ECDH P-521 + ML-KEM-768 (FIPS 203)** |
 
 #### Best Practices for Production Deployment:
 
-1. **PPK Rotation:** Rotate PPKs regularly. Manual PPKs require out-of-band coordination between administrators.
+1. **Use ML-KEM-768 or ML-KEM-1024:** ML-KEM-768 provides NIST Level 3 security (192-bit equivalent). For highest security requirements, use ML-KEM-1024 (Level 5).
 
-2. **Use Dynamic PPK (SKIP):** For production, consider Cisco SKIP protocol for automated PPK provisioning and rotation:
-   \`\`\`
-   crypto skip-client SKIP-CFG
-    server ipv4 10.10.0.4 port 9991
-    psk id psk-id1 key 0 skipSecret
-   \`\`\`
+2. **Always Use Hybrid Mode:** Never use ML-KEM alone — always combine with classical ECDH for defense-in-depth. If ML-KEM is ever found to have a weakness, the classical exchange still protects your traffic.
 
-3. **PPK Entropy:** Ensure PPKs have sufficient entropy (at least 256 bits). Use cryptographically random keys, not simple passwords.
+3. **MTU Considerations:** ML-KEM key material is large (1,184 bytes for ML-KEM-768). Ensure your network path supports the larger IKE packets or enable IP fragmentation.
 
-4. **Always Use \`required\`:** Set the \`required\` flag to prevent fallback to non-quantum-safe sessions.
-
-5. **Monitor:** Regularly verify quantum resistance with:
+4. **Monitor Key Exchanges:** Watch for IKE_INTERMEDIATE exchange failures in logs:
    \`\`\`
    show crypto ikev2 sa detailed
+   show logging | include CRYPTO
    \`\`\`
 
-#### Official Cisco Documentation:
-- [Configuring Quantum-Safe Encryption Using Postquantum Preshared Keys](https://www.cisco.com/c/en/us/td/docs/routers/ios/config/17-x/sec-vpn/b-security-vpn/m-sec-cfg-quantum-encryption-ppk.html)
-- [The Journey to Post-Quantum Cryptography in WAN (White Paper)](https://www.cisco.com/c/dam/en_us/about/trust-center/post-quantum-resistant-secure-wan-white-paper.pdf)
-- RFC 8784: Mixing Preshared Keys in IKEv2 for Post-Quantum Security
+5. **Plan for Algorithm Agility:** NIST may certify additional PQC algorithms. Design your deployment to easily swap \`pqc\` parameters without restructuring the entire VPN.
+
+#### Comparing PQC Approaches:
+
+| Approach | Mechanism | Standard | Key Distribution |
+|---|---|---|---|
+| **ML-KEM (this tutorial)** | Lattice-based KEM in IKE | FIPS 203 + RFC 9370 | Algorithmic (no pre-provisioning) |
+| PPK (RFC 8784) | Pre-shared key mixing | RFC 8784 | Manual or SKIP distribution |
+
+#### Official References:
+- [NIST FIPS 203 — ML-KEM Standard](https://csrc.nist.gov/pubs/fips/203/final)
+- [RFC 9370 — Multiple Key Exchanges in IKEv2](https://www.rfc-editor.org/rfc/rfc9370.html)
+- [IETF Draft — ML-KEM in IKEv2](https://datatracker.ietf.org/doc/draft-ietf-ipsecme-ikev2-mlkem/)
+- [Cisco — Quantum-Safe WAN Security](https://blogs.cisco.com/networking/safeguard-your-wan-from-quantum-computing-threats)
 
 Click **Continue** to finish the tutorial.`,
   validate:()=>true, hints:[]
@@ -1101,9 +1110,9 @@ function checkStepCompletion(idx) {
 }
 
 /* ── Badge SVG Generator ── */
-const BADGE_VARIANT = 'IKEv2 PPK (RFC 8784)';
-const BADGE_TUTORIAL_URL = 'ioeacademy.github.io/cisco-pqc-vpn-ppk';
-const BADGE_FULL_URL = 'https://ioeacademy.github.io/cisco-pqc-vpn-ppk/';
+const BADGE_VARIANT = 'ML-KEM Hybrid Key Exchange (FIPS 203)';
+const BADGE_TUTORIAL_URL = 'ioeacademy.github.io/cisco-pqc-vpn-mlkem';
+const BADGE_FULL_URL = 'https://ioeacademy.github.io/cisco-pqc-vpn-mlkem/';
 
 function generateBadgeSVG(userName, withoutHelp) {
   const gold = withoutHelp;
@@ -1120,36 +1129,25 @@ function generateBadgeSVG(userName, withoutHelp) {
     <filter id="glow"><feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="${glow}"/></filter>
   </defs>
   <rect width="400" height="480" rx="20" fill="url(#bg)" stroke="url(#rim)" stroke-width="3" filter="url(#glow)"/>
-  <!-- Shield icon -->
   <g transform="translate(200,70)">
     <path d="M0-40 L30-25 L30,10 Q30,35 0,50 Q-30,35 -30,10 L-30-25Z" fill="none" stroke="url(#rim)" stroke-width="2.5"/>
     <text y="-2" text-anchor="middle" fill="${c1}" font-size="28" font-family="serif">\u{1F512}</text>
   </g>
-  <!-- Tier -->
   <rect x="150" y="115" width="100" height="22" rx="11" fill="${c1}" opacity="0.15"/>
   <text x="200" y="130" text-anchor="middle" fill="${c1}" font-size="11" font-weight="700" font-family="sans-serif" letter-spacing="2">${tier}</text>
-  <!-- Title -->
   <text x="200" y="170" text-anchor="middle" fill="#f0f6fc" font-size="20" font-weight="700" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">Quantum Safe Networking</text>
   <text x="200" y="195" text-anchor="middle" fill="#f0f6fc" font-size="20" font-weight="700" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">Pioneer</text>
-  <!-- Divider -->
   <line x1="80" y1="215" x2="320" y2="215" stroke="${c1}" stroke-opacity="0.3" stroke-width="1"/>
-  <!-- Description -->
   <text x="200" y="240" text-anchor="middle" fill="#c9d1d9" font-size="13" font-family="sans-serif">Completed Configuration of</text>
   <text x="200" y="260" text-anchor="middle" fill="${c1}" font-size="14" font-weight="600" font-family="sans-serif">${BADGE_VARIANT}</text>
   <text x="200" y="278" text-anchor="middle" fill="#8b949e" font-size="11" font-family="sans-serif">on Cisco IOS Router Simulator</text>
-  <!-- User name -->
   <text x="200" y="305" text-anchor="middle" fill="#f0f6fc" font-size="20" font-weight="600" font-family="sans-serif">${userName || 'Network Engineer'}</text>
-  <!-- Date -->
   <text x="200" y="330" text-anchor="middle" fill="#8b949e" font-size="12" font-family="sans-serif">${dateStr}</text>
-  <!-- Divider -->
   <line x1="80" y1="350" x2="320" y2="350" stroke="${c1}" stroke-opacity="0.2" stroke-width="1"/>
-  <!-- Branding -->
   <text x="200" y="380" text-anchor="middle" fill="#8b949e" font-size="11" font-family="sans-serif">Cisco Networking Academy</text>
-  <!-- Tutorial URL (discovery link) -->
   <a href="${BADGE_FULL_URL}" target="_blank">
     <text x="200" y="405" text-anchor="middle" fill="#58a6ff" font-size="11" font-family="sans-serif" text-decoration="underline">${BADGE_TUTORIAL_URL}</text>
   </a>
-  <!-- Footer -->
   <text x="200" y="435" text-anchor="middle" fill="#484f58" font-size="9" font-family="sans-serif">Verify at ${BADGE_TUTORIAL_URL}</text>
 </svg>`;
 }
@@ -1162,23 +1160,17 @@ function showBadgeModal() {
   const previewEl = document.getElementById('badge-preview');
   const nameInput = document.getElementById('badge-name-input');
   const statsEl = document.getElementById('badge-stats-content');
-
-  // Update stats
   if (statsEl) {
     statsEl.innerHTML = `
       <div><span class="stat-val">14/14</span>Steps</div>
       <div><span class="stat-val">${usedShowMe.size}</span>Help used</div>
       <div><span class="stat-val">${elapsed}m</span>Duration</div>`;
   }
-
-  // Render badge preview
   function updatePreview() {
     if (previewEl) previewEl.innerHTML = generateBadgeSVG(nameInput?.value || '', withoutHelp);
   }
   updatePreview();
   if (nameInput) nameInput.oninput = updatePreview;
-
-  // Download handlers
   document.getElementById('badge-dl-png').onclick = function() {
     const svg = generateBadgeSVG(nameInput?.value || '', withoutHelp);
     const img = new Image();
@@ -1196,7 +1188,6 @@ function showBadgeModal() {
   };
   document.getElementById('badge-close').onclick = function() { modal.classList.remove('open'); };
   modal.onclick = function(e) { if (e.target === modal) modal.classList.remove('open'); };
-
   modal.classList.add('open');
 }
 
@@ -1317,7 +1308,7 @@ function switchTopoTab(dKey) {
 }
 
 /* =====================================================================
-   TUNNEL OVERLAY
+   TUNNEL OVERLAY — SVG arc between R1 and R2
 ===================================================================== */
 function updateTunnelOverlay() {
   const svg = document.getElementById('tunnel-svg');
@@ -1340,8 +1331,8 @@ function updateTunnelOverlay() {
   const xMid = (x1 + x2) / 2;
   const span = x2 - x1;
 
-  const ppk = checkPPKStatus(CELL_ID, 'r1', 'r2');
-  const isQuantum = ppk && ppk.ppkId;
+  const mlkem = checkMLKEMStatus(CELL_ID, 'r1', 'r2');
+  const isQuantum = mlkem && mlkem.algorithm;
   const label = isQuantum ? 'Quantum Safe VPN' : 'Traditional VPN';
   const color = isQuantum ? '#2ea043' : '#d29922';
 
@@ -1399,7 +1390,6 @@ function updateTunnelOverlay() {
 }
 
 function cheatBadge() {
-  // Secret: run all tutorial steps in sequence then show badge
   let delay = 0;
   const stepDelay = 200;
   TUTORIAL_STEPS.forEach((step, idx) => {
@@ -1423,7 +1413,6 @@ function cheatBadge() {
 }
 
 function iosSubmit(rKey, raw) {
-  // Easter egg: /cheat badge
   if (raw && raw.trim().toLowerCase() === '/cheat badge') { cheatBadge(); return; }
   const devId=CELL_ID+'_'+rKey;
   const dev=iosDevices[devId];
@@ -1648,7 +1637,8 @@ function repositionHotspots() {
     el.style.width  = (d.w * r.w) + 'px';
     el.style.height = (d.h * r.h) + 'px';
   }
-  updateTunnelOverlay();
+  // Redraw tunnel arc overlay with new coordinates
+  if (typeof updateTunnelOverlay === 'function') updateTunnelOverlay();
 }
 
 function scaleTopoLabels(topoH) {
@@ -1658,6 +1648,7 @@ function scaleTopoLabels(topoH) {
     const base = el.classList.contains('topo-ip') ? baseIp : baseLbl;
     el.style.fontSize = Math.max(7, Math.round(base * ratio)) + 'px';
   });
+  // SVG tunnel overlay auto-scales — just redraw it
   updateTunnelOverlay();
 }
 
@@ -1716,20 +1707,21 @@ const CMD_LEARN_LINKS = {
   '%lineproto':        { url: 'https://www.cisco.com/c/en/us/td/docs/routers/access/wireless/software/guide/SysMsgLogging.html', label: 'Cisco: System Message Logging' },
   'enter configuration': { url: 'https://www.cisco.com/c/en/us/td/docs/ios/fundamentals/configuration/guide/15_0s/cf_15_0S_book/cf_cli-basics.html', label: 'Cisco: Using the IOS CLI' },
   'success rate':      { url: 'https://www.cisco.com/c/en/us/support/docs/ios-nx-os-software/ios-software-releases-121-mainline/12778-ping-traceroute.html', label: 'Cisco: Using Ping and Traceroute' },
-  'quantum resistance': { url: 'https://www.cisco.com/c/en/us/td/docs/routers/ios/config/17-x/sec-vpn/b-security-vpn/m-sec-cfg-quantum-encryption-ppk.html#verifying-the-ppk-configuration', label: 'Cisco IOS XE 17.x — Verifying PPK Configuration' },
+  'quantum resistance': { url: 'https://csrc.nist.gov/pubs/fips/203/final', label: 'NIST FIPS 203 — ML-KEM Standard' },
 
   // Steps 7+: Show & Verify
   'show crypto':      { url: 'https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/security/s1/sec-s1-cr-book/sec-cr-s2.html', label: 'Cisco Security Cmd Ref — show crypto' },
 
-  // Steps 9-10: IKEv2 Keyring & Profile — deep-linked to PPK config sections
-  'crypto ikev2 keyring':  { url: 'https://www.cisco.com/c/en/us/td/docs/routers/ios/config/17-x/sec-vpn/b-security-vpn/m-sec-cfg-quantum-encryption-ppk.html#configuring-manual-ppks-in-ikev2-keyring', label: 'Cisco IOS XE 17.x — PPK in IKEv2 Keyring' },
+  // Steps 9-10: IKEv2 Proposal & Profile — ML-KEM hybrid key exchange
+  'crypto ikev2 keyring':  { url: 'https://www.cisco.com/c/en/us/td/docs/routers/ios/config/17-x/sec-vpn/b-security-vpn/m-sec-cfg-quantum-encryption-ppk.html#configuring-manual-ppks-in-ikev2-keyring', label: 'Cisco IOS XE 17.x — IKEv2 Keyring Configuration' },
   'crypto ikev2 profile':  { url: 'https://www.cisco.com/c/en/us/td/docs/routers/ios/config/17-x/sec-vpn/b-security-vpn/m_sec-cfg-ikev2-flex.html#task_20288C58E8B1416897A763FABA8B0885', label: 'Cisco IOS XE 17.x — Configuring IKEv2 Profile' },
-  'peer':                  { url: 'https://www.cisco.com/c/en/us/td/docs/routers/ios/config/17-x/sec-vpn/b-security-vpn/m-sec-cfg-quantum-encryption-ppk.html#configuring-manual-ppks-in-ikev2-keyring', label: 'Cisco IOS XE 17.x — PPK Keyring Peer Config' },
-  'address':               { url: 'https://www.cisco.com/c/en/us/td/docs/routers/ios/config/17-x/sec-vpn/b-security-vpn/m-sec-cfg-quantum-encryption-ppk.html#configuring-manual-ppks-in-ikev2-keyring', label: 'Cisco IOS XE 17.x — PPK Keyring Peer Address' },
+  'peer':                  { url: 'https://www.cisco.com/c/en/us/td/docs/routers/ios/config/17-x/sec-vpn/b-security-vpn/m-sec-cfg-quantum-encryption-ppk.html#configuring-manual-ppks-in-ikev2-keyring', label: 'Cisco IOS XE 17.x — IKEv2 Keyring Peer Config' },
+  'address':               { url: 'https://www.cisco.com/c/en/us/td/docs/routers/ios/config/17-x/sec-vpn/b-security-vpn/m-sec-cfg-quantum-encryption-ppk.html#configuring-manual-ppks-in-ikev2-keyring', label: 'Cisco IOS XE 17.x — IKEv2 Keyring Peer Address' },
   'pre-shared-key':        { url: 'https://www.cisco.com/c/en/us/td/docs/routers/ios/config/17-x/sec-vpn/b-security-vpn/m_sec-cfg-ikev2-flex.html#GUID-D6AC9B42-1F22-4F60-A06A-A72575181659', label: 'Cisco IOS XE 17.x — IKEv2 Keyring Config' },
-  'ppk':                   { url: 'https://www.cisco.com/c/en/us/td/docs/routers/ios/config/17-x/sec-vpn/b-security-vpn/m-sec-cfg-quantum-encryption-ppk.html#configuring-manual-ppk', label: 'Cisco IOS XE 17.x — Configuring Manual PPK (RFC 8784)' },
+  'ppk':                   { url: 'https://www.cisco.com/c/en/us/td/docs/routers/ios/config/17-x/sec-vpn/b-security-vpn/m-sec-cfg-quantum-encryption-ppk.html#configuring-manual-ppk', label: 'Cisco IOS XE 17.x — Configuring Manual PPK' },
+  'pqc':                   { url: 'https://csrc.nist.gov/pubs/fips/203/final', label: 'NIST FIPS 203 — ML-KEM Key Encapsulation Mechanism' },
   'match identity':        { url: 'https://www.cisco.com/c/en/us/td/docs/routers/ios/config/17-x/sec-vpn/b-security-vpn/m_sec-cfg-ikev2-flex.html#task_20288C58E8B1416897A763FABA8B0885', label: 'Cisco IOS XE 17.x — IKEv2 Profile Match Identity' },
-  'keyring ppk':           { url: 'https://www.cisco.com/c/en/us/td/docs/routers/ios/config/17-x/sec-vpn/b-security-vpn/m-sec-cfg-quantum-encryption-ppk.html#configuring-ikev2-keyring-in-ikev2-profile', label: 'Cisco IOS XE 17.x — Linking PPK Keyring (RFC 8784)' },
+  'keyring ppk':           { url: 'https://www.cisco.com/c/en/us/td/docs/routers/ios/config/17-x/sec-vpn/b-security-vpn/m-sec-cfg-quantum-encryption-ppk.html#configuring-ikev2-keyring-in-ikev2-profile', label: 'Cisco IOS XE 17.x — Linking PPK Keyring' },
   'keyring local':         { url: 'https://www.cisco.com/c/en/us/td/docs/routers/ios/config/17-x/sec-vpn/b-security-vpn/m_sec-cfg-ikev2-flex.html#GUID-D6AC9B42-1F22-4F60-A06A-A72575181659', label: 'Cisco IOS XE 17.x — IKEv2 Keyring Config' },
 };
 
@@ -1875,7 +1867,7 @@ const CMD_EXPLANATIONS = [
   { match: /^set\s+transform-set\s+(\S+)/i,
     text: (cmd) => { const name = cmd.match(/set\s+transform-set\s+(\S+)/i)[1]; return `<strong>Links transform set <code>${name}</code></strong> to this crypto map. The transform set defines the ESP encryption and integrity algorithms used for the actual data traffic.`; } },
   { match: /^set\s+ikev2-profile\s+(\S+)/i,
-    text: (cmd) => { const name = cmd.match(/set\s+ikev2-profile\s+(\S+)/i)[1]; return `<strong>Binds IKEv2 profile <code>${name}</code></strong> to this crypto map. This links the PPK quantum-safe configuration to the IPSec tunnel, enabling post-quantum key derivation via RFC 8784.`; } },
+    text: (cmd) => { const name = cmd.match(/set\s+ikev2-profile\s+(\S+)/i)[1]; return `<strong>Binds IKEv2 profile <code>${name}</code></strong> to this crypto map. This links the ML-KEM quantum-safe configuration to the IPSec tunnel, enabling hybrid post-quantum key exchange via RFC 9370.`; } },
   { match: /^match\s+address\s+(\d+)/i,
     text: (cmd) => { const acl = cmd.match(/match\s+address\s+(\d+)/i)[1]; return `<strong>Matches traffic using ACL <code>${acl}</code>.</strong> Only packets matching this access list will be encrypted and sent through the VPN tunnel. Non-matching traffic passes unencrypted.`; } },
   { match: /^crypto\s+map\s+(\S+)\s*$/i,
@@ -1887,7 +1879,7 @@ const CMD_EXPLANATIONS = [
   { match: /^show\s+crypto\s+ipsec\s+sa$/i,
     text: '<strong>Displays IPSec Security Associations.</strong> Shows Phase 2 tunnel details including packet counters (<code>#pkts encaps/decaps</code>), transform set in use, and peer addresses. Non-zero counters confirm data is flowing through the tunnel.' },
   { match: /^show\s+crypto\s+ikev2\s+sa\s+detailed$/i,
-    text: '<strong>Displays detailed IKEv2 Security Associations.</strong> Shows encryption, PRF, hash, DH group, and authentication method. Most importantly, shows <code>Quantum-safe Encryption using Manual PPK</code> and the <code>PPK ID</code> if post-quantum protection is active.' },
+    text: '<strong>Displays detailed IKEv2 Security Associations.</strong> Shows encryption, PRF, hash, DH group, and authentication method. Most importantly, shows <code>PQC Key Exchange: ML-KEM-768</code> and <code>Quantum-safe Encryption using PQC: ML-KEM-768</code> if post-quantum hybrid key exchange is active.' },
   { match: /^show\s+crypto\s+ikev2\s+sa$/i,
     text: '<strong>Displays IKEv2 Security Associations.</strong> Shows active IKEv2 tunnels with local/remote addresses, status (READY/NEGOTIATING), and encryption parameters.' },
   { match: /^show\s+crypto\s+ikev2\s+proposal$/i,
@@ -1895,9 +1887,9 @@ const CMD_EXPLANATIONS = [
   { match: /^show\s+crypto\s+ikev2\s+policy$/i,
     text: '<strong>Displays IKEv2 policies.</strong> Shows policies that bind proposals to VRF matching criteria, controlling which proposals are offered for specific traffic.' },
   { match: /^show\s+crypto\s+ikev2\s+keyring$/i,
-    text: '<strong>Displays IKEv2 keyrings.</strong> Shows configured peers with their addresses, pre-shared keys (masked), and PPK configuration (ID, key masked, required flag). Use this to verify PPK IDs match on both peers.' },
+    text: '<strong>Displays IKEv2 keyrings.</strong> Shows configured peers with their addresses and pre-shared keys (masked). In the ML-KEM approach, quantum resistance is configured via the IKEv2 proposal <code>pqc</code> command, not via PPK keyrings.' },
   { match: /^show\s+crypto\s+ikev2\s+profile$/i,
-    text: '<strong>Displays IKEv2 profiles.</strong> Shows match criteria, authentication method, and keyring bindings (<code>keyring local</code> for auth, <code>keyring ppk</code> for quantum resistance). Verify both are configured.' },
+    text: '<strong>Displays IKEv2 profiles.</strong> Shows match criteria, authentication method, and keyring bindings. In the ML-KEM approach, quantum resistance is in the proposal, not the profile.' },
   { match: /^show\s+crypto\s+isakmp\s+policy$/i,
     text: '<strong>Displays ISAKMP policies.</strong> Shows all configured protection suites with their priority, encryption, hash, authentication method, DH group, and lifetime.' },
   { match: /^show\s+crypto\s+map$/i,
@@ -1911,15 +1903,23 @@ const CMD_EXPLANATIONS = [
 
   // Step 9: IKEv2 Keyring
   { match: /^crypto\s+ikev2\s+keyring\s+(\S+)/i,
-    text: (cmd) => { const name = cmd.match(/crypto\s+ikev2\s+keyring\s+(\S+)/i)[1]; return `<strong>Creates or enters IKEv2 keyring <code>${name}</code>.</strong> A keyring holds peer definitions with authentication credentials (pre-shared keys) and post-quantum PPK configuration. Multiple peers can be defined in one keyring.`; } },
+    text: (cmd) => { const name = cmd.match(/crypto\s+ikev2\s+keyring\s+(\S+)/i)[1]; return `<strong>Creates or enters IKEv2 keyring <code>${name}</code>.</strong> A keyring holds peer definitions with authentication credentials (pre-shared keys). Multiple peers can be defined in one keyring.`; } },
   { match: /^peer\s+(\S+)/i,
-    text: (cmd) => { const name = cmd.match(/peer\s+(\S+)/i)[1]; return `<strong>Defines peer <code>${name}</code></strong> inside the keyring. Each peer entry contains the remote router's address, authentication key, and optionally a PPK for quantum resistance.`; } },
+    text: (cmd) => { const name = cmd.match(/peer\s+(\S+)/i)[1]; return `<strong>Defines peer <code>${name}</code></strong> inside the keyring. Each peer entry contains the remote router's address and authentication key.`; } },
   { match: /^address\s+(\S+)/i,
     text: (cmd) => { const ip = cmd.match(/address\s+(\S+)/i)[1]; return `<strong>Sets peer address to <code>${ip}</code>.</strong> This is the remote router's WAN IP. The keyring uses this to match incoming IKEv2 negotiations to the correct peer credentials.`; } },
   { match: /^pre-shared-key\s+(\S+)/i,
-    text: (cmd) => { return `<strong>Sets the IKEv2 pre-shared key</strong> for this peer. Both routers must have matching keys for IKEv2 authentication to succeed. This is the standard authentication credential (separate from the PPK used for quantum resistance).`; } },
+    text: (cmd) => { return `<strong>Sets the IKEv2 pre-shared key</strong> for this peer. Both routers must have matching keys for IKEv2 authentication to succeed.`; } },
+  { match: /^pqc\s+(\S+)/i,
+    text: (cmd) => { const alg = cmd.match(/pqc\s+(\S+)/i)[1]; const label = alg.toUpperCase().replace('MLKEM','ML-KEM-'); return `<strong>Configures post-quantum key exchange algorithm: <code>${label}</code></strong> (FIPS 203).<br><br>` +
+      `This enables a <strong>hybrid key exchange</strong> per RFC 9370: classical ECDH (from <code>group</code>) + ML-KEM are performed in sequence. Both shared secrets are combined into the final session keys.<br><br>` +
+      `<strong>Available parameter sets:</strong><br>` +
+      `• <code>mlkem512</code> — 128-bit security (NIST Level 1), smallest payloads<br>` +
+      `• <code>mlkem768</code> — 192-bit security (NIST Level 3), recommended balance<br>` +
+      `• <code>mlkem1024</code> — 256-bit security (NIST Level 5), highest security<br><br>` +
+      `Both peers must configure the <strong>same</strong> pqc algorithm. Add <code>optional</code> to allow fallback if the peer does not support ML-KEM. The ML-KEM encapsulation occurs during an <strong>IKE_INTERMEDIATE</strong> exchange after IKE_SA_INIT.`; } },
   { match: /^ppk\s+manual\s+id\s+(\S+)\s+key\s+(\S+)(.*)/i,
-    text: (cmd) => { const m = cmd.match(/ppk\s+manual\s+id\s+(\S+)\s+key\s+(\S+)(.*)/i); const req = m[3]?.includes('required'); return `<strong>Configures Post-Quantum Pre-shared Key (PPK)</strong> per RFC 8784.<br><br>` +
+    text: (cmd) => { const m = cmd.match(/ppk\s+manual\s+id\s+(\S+)\s+key\s+(\S+)(.*)/i); const req = m[3]?.includes('required'); return `<strong>Configures Post-Quantum Pre-shared Key (PPK)</strong> per RFC 8784. (Alternative approach to ML-KEM.)<br><br>` +
       `<strong>PPK ID:</strong> <code>${m[1]}</code> — identifier sent during IKE_AUTH (must match on both peers)<br>` +
       `<strong>Key:</strong> mixed into session key derivation (never sent over the wire)<br>` +
       (req ? `<strong>Required:</strong> tunnel will <em>only</em> establish if PPK negotiation succeeds — no fallback to classical crypto` : `<strong>Optional:</strong> tunnel can fall back to classical crypto if peer doesn't support PPK`); } },
@@ -1932,9 +1932,9 @@ const CMD_EXPLANATIONS = [
   { match: /^authentication\s+(local|remote)\s+pre-share\s+key\s+(\S+)/i,
     text: (cmd) => { const m = cmd.match(/authentication\s+(local|remote)\s+pre-share\s+key\s+(\S+)/i); return `<strong>Sets ${m[1]} authentication</strong> to pre-shared key. The ${m[1]==='local'?'local router proves its identity':'remote peer is verified'} using this shared secret during IKE_AUTH exchange.`; } },
   { match: /^keyring\s+ppk\s+(\S+)/i,
-    text: (cmd) => { const name = cmd.match(/keyring\s+ppk\s+(\S+)/i)[1]; return `<strong>Links PPK keyring <code>${name}</code></strong> for quantum-safe key derivation. This is the critical command that enables RFC 8784 — the PPK from the keyring is mixed into IKEv2 session key derivation, making the tunnel resistant to quantum computer attacks.`; } },
+    text: (cmd) => { const name = cmd.match(/keyring\s+ppk\s+(\S+)/i)[1]; return `<strong>Links PPK keyring <code>${name}</code></strong> for quantum-safe key derivation per RFC 8784. (This is the PPK approach — an alternative to the ML-KEM hybrid key exchange used in this tutorial.)`; } },
   { match: /^keyring\s+local\s+(\S+)/i,
-    text: (cmd) => { const name = cmd.match(/keyring\s+local\s+(\S+)/i)[1]; return `<strong>Links local keyring <code>${name}</code></strong> for peer authentication. The pre-shared keys in this keyring are used for standard IKEv2 authentication (separate from PPK quantum resistance).`; } },
+    text: (cmd) => { const name = cmd.match(/keyring\s+local\s+(\S+)/i)[1]; return `<strong>Links local keyring <code>${name}</code></strong> for peer authentication. The pre-shared keys in this keyring are used for standard IKEv2 authentication.`; } },
 
   // ─── CLI response / syslog messages ───
   { match: /%LINK-3-UPDOWN.*Interface\s+(\S+).*changed state to (\w+)/i,
@@ -2261,7 +2261,7 @@ const CMD_EXPLANATIONS = [
   { match: /^authentication method:\s+(.*)/i,
     text: (msg) => { const meth = msg.match(/:\s+(.*)/i)[1].trim(); return `<strong>IKE authentication: <code>${meth}</code>.</strong> ${meth.toLowerCase().includes('pre-shared')?'Pre-Shared Key — both peers authenticate using a shared secret configured in advance. Simple to deploy but requires out-of-band key distribution. For large-scale deployments, consider PKI (RSA/ECDSA certificates).':'Method used to prove peer identity during IKE negotiation.'}`; } },
   { match: /^Diffie-Hellman group:\s+#?(\d+)/i,
-    text: (msg) => { const g = msg.match(/(\d+)/)[1]; const desc = {'1':'768-bit (broken, do not use)','2':'1024-bit (weak, deprecated by NIST)','5':'1536-bit (marginal)','14':'2048-bit MODP (minimum recommended)','15':'3072-bit MODP','16':'4096-bit MODP (strong)','19':'256-bit ECP/ECDH','20':'384-bit ECP/ECDH','21':'521-bit ECP/ECDH'}; return `<strong>Diffie-Hellman Group <code>${g}</code></strong> — ${desc[g]||'unknown group'}. DH enables two parties to derive a shared secret over an insecure channel. Both peers must use the same group. Higher groups are more secure but slower to compute. Note: all classical DH groups are vulnerable to quantum computers — PPK (RFC 8784) adds quantum resistance.`; } },
+    text: (msg) => { const g = msg.match(/(\d+)/)[1]; const desc = {'1':'768-bit (broken, do not use)','2':'1024-bit (weak, deprecated by NIST)','5':'1536-bit (marginal)','14':'2048-bit MODP (minimum recommended)','15':'3072-bit MODP','16':'4096-bit MODP (strong)','19':'256-bit ECP/ECDH','20':'384-bit ECP/ECDH','21':'521-bit ECP/ECDH'}; return `<strong>Diffie-Hellman Group <code>${g}</code></strong> — ${desc[g]||'unknown group'}. DH enables two parties to derive a shared secret over an insecure channel. Both peers must use the same group. Note: all classical DH groups are vulnerable to quantum computers — adding <code>pqc mlkem768</code> in the IKEv2 proposal enables hybrid quantum-resistant key exchange.`; } },
   { match: /^lifetime:\s+(\d+)\s+seconds/i,
     text: (msg) => { const lt = msg.match(/(\d+)/)[1]; const hrs = Math.floor(parseInt(lt)/3600); return `<strong>IKE SA lifetime: <code>${lt}</code> seconds</strong> (${hrs} hours). After this time, the IKE SA expires and must be renegotiated with fresh Diffie-Hellman keys. Shorter lifetimes increase security (less time for brute-force attacks) but add overhead from more frequent rekeying. Default is 86400 seconds (24 hours).`; } },
 
@@ -2362,7 +2362,11 @@ const CMD_EXPLANATIONS = [
   { match: /^PRF\s*:\s+(\S+)/i,
     text: (msg) => { const alg = msg.match(/:\s+(\S+)/i)[1]; return `<strong>PRF (Pseudo-Random Function): <code>${alg}</code>.</strong> Used internally by IKEv2 for key derivation — generating session keys, authentication payloads, and child SA keys from the DH shared secret. In IKEv2, PRF is typically the same algorithm as Integrity but serves a different role. PRF feeds the SKEYSEED computation defined in RFC 7296 Section 2.14.`; } },
   { match: /^DH Group\s*:\s+(.*)/i,
-    text: (msg) => { const dh = msg.match(/:\s+(.*)/i)[1].trim(); return `<strong>Diffie-Hellman group: <code>${dh}</code>.</strong> The key exchange group used during IKE_SA_INIT to compute the shared secret. Both peers must support the same group. MODP (Modular Exponentiation) groups use integer arithmetic; ECP groups use Elliptic Curve math (smaller keys, same security). All classical DH groups are theoretically vulnerable to quantum computers — PPK (RFC 8784) adds a quantum-resistant layer.`; } },
+    text: (msg) => { const dh = msg.match(/:\s+(.*)/i)[1].trim(); return `<strong>Diffie-Hellman group: <code>${dh}</code>.</strong> The classical key exchange group used during IKE_SA_INIT. Both peers must support the same group. MODP groups use integer arithmetic; ECP groups use Elliptic Curve math (smaller keys, same security). All classical DH groups are vulnerable to quantum computers — adding <code>pqc mlkem768</code> creates a hybrid exchange that is quantum-resistant.`; } },
+  { match: /^PQC Key Exchange:\s+(.+)/i,
+    text: (msg) => { const alg = msg.match(/:\s+(.+)/i)[1].trim(); return `<strong>PQC Key Exchange: <code>${alg}</code>.</strong> This ML-KEM algorithm (FIPS 203) provides quantum-resistant key encapsulation. During IKE negotiation, an IKE_INTERMEDIATE exchange (RFC 9370) carries the ML-KEM public key and ciphertext. The resulting shared secret is combined with the classical ECDH shared secret for defense-in-depth.`; } },
+  { match: /^PQC\s*:\s+(.+)/i,
+    text: (msg) => { const alg = msg.match(/:\s+(.+)/i)[1].trim(); return `<strong>PQC algorithm: <code>${alg}</code>.</strong> Configured via the <code>pqc</code> command in the IKEv2 proposal. This specifies the FIPS 203 ML-KEM parameter set for the hybrid key exchange. NIST recommends ML-KEM-768 as the default.`; } },
 
   // ─── show crypto ikev2 policy output lines ───
   { match: /^IKEv2 Policy:\s+(\S+)/i,
@@ -2397,34 +2401,36 @@ const CMD_EXPLANATIONS = [
     text: (msg) => { const m = msg.match(/(\d+)\/(\d+)/); return `<strong>IKE SA timing:</strong> Lifetime <code>${m[1]}</code> sec / Active for <code>${m[2]}</code> sec.<br>` +
       `<strong>Lifetime</strong> is the configured maximum SA duration (default 86400 = 24 hours).<br>` +
       `<strong>Active Time</strong> is how long this SA has been up. When Active Time reaches Lifetime, the SA is renegotiated automatically (rekeying). During rekeying, a new SA is established before the old one expires — no traffic interruption.`; } },
-  { match: /Quantum.safe Encryption using Manual PPK/i,
-    text: '<strong>Quantum-safe Encryption is ACTIVE using Manual PPK.</strong> The PPK (Post-Quantum Pre-shared Key) has been successfully mixed into the IKEv2 session key derivation per RFC 8784. Even if a quantum computer breaks the DH exchange, the traffic remains protected by the additional PPK entropy. This is confirmed by the USE_PPK notification exchanged during IKE_SA_INIT.' },
+  { match: /Quantum.safe Encryption using PQC.*ML-KEM/i,
+    text: (msg) => { const m = msg.match(/PQC:\s+(.+)/); const alg = m ? m[1] : 'ML-KEM'; return `<strong>Quantum-safe Encryption is ACTIVE using ${alg}.</strong> A hybrid key exchange was performed: classical ECDH combined with FIPS 203 ${alg} via an IKE_INTERMEDIATE exchange (RFC 9370). Both shared secrets were mixed into the final session keys. Even if a quantum computer breaks the ECDH exchange, the ${alg} shared secret keeps the traffic protected.`; } },
+  { match: /Quantum.safe Encryption/i,
+    text: '<strong>Quantum-safe Encryption is ACTIVE.</strong> The session keys were derived using a hybrid key exchange that combines classical ECDH with a post-quantum algorithm, providing defense-in-depth against quantum computer attacks.' },
   { match: /^PPK ID:\s+(\S+)/i,
-    text: (msg) => { const id = msg.match(/PPK ID:\s+(\S+)/i)[1]; return `<strong>PPK Identifier: <code>${id}</code>.</strong> This is the PPK ID that was negotiated between peers during IKE_AUTH. Both peers must have a matching PPK with this ID configured in their keyrings. The PPK itself (the actual key material) is never transmitted — only the ID is exchanged so both sides know which pre-positioned key to use.`; } },
+    text: (msg) => { const id = msg.match(/PPK ID:\s+(\S+)/i)[1]; return `<strong>PPK Identifier: <code>${id}</code>.</strong> (PPK is an alternative quantum-resistance approach per RFC 8784, separate from the ML-KEM hybrid key exchange used in this tutorial.)`; } },
   { match: /^No IKEv2 SA configured/i,
     text: '<strong>No IKEv2 tunnels active.</strong> Either no crypto map is applied to any interface, or the IKEv2 negotiation has not occurred yet. Trigger the tunnel by sending "interesting traffic" that matches the crypto ACL (e.g., <code>ping</code> through the VPN).' },
 
   // ─── show crypto ikev2 keyring output lines ───
   { match: /^IKEv2 Keyring:\s+(\S+)/i,
-    text: (msg) => { const name = msg.match(/:\s+(\S+)/i)[1]; return `<strong>IKEv2 Keyring <code>${name}</code>.</strong> A keyring is a container for peer authentication credentials. It holds pre-shared keys (for standard IKEv2 auth) and optionally PPK configuration (for quantum resistance). Referenced by IKEv2 profiles via <code>keyring local</code> and <code>keyring ppk</code>.`; } },
+    text: (msg) => { const name = msg.match(/:\s+(\S+)/i)[1]; return `<strong>IKEv2 Keyring <code>${name}</code>.</strong> A keyring is a container for peer authentication credentials (pre-shared keys). Referenced by IKEv2 profiles via <code>keyring local</code>.`; } },
   { match: /^Peer:\s+(\S+)/i,
-    text: (msg) => { const name = msg.match(/Peer:\s+(\S+)/i)[1]; return `<strong>Peer entry: <code>${name}</code>.</strong> Defines authentication credentials for a specific VPN peer. The peer name is locally significant (documentation only). What matters is the <code>address</code> match and the <code>pre-shared-key</code> / PPK values.`; } },
+    text: (msg) => { const name = msg.match(/Peer:\s+(\S+)/i)[1]; return `<strong>Peer entry: <code>${name}</code>.</strong> Defines authentication credentials for a specific VPN peer. The peer name is locally significant (documentation only). What matters is the <code>address</code> match and the <code>pre-shared-key</code> value.`; } },
   { match: /^Address:\s+(\S+)/i,
-    text: (msg) => { const addr = msg.match(/Address:\s+(\S+)/i)[1]; return `<strong>Peer address: <code>${addr}</code>.</strong> The IP address (or range) this keyring entry applies to. During IKEv2 negotiation, the router matches the remote peer's source IP against this address to select the correct pre-shared key and PPK.`; } },
+    text: (msg) => { const addr = msg.match(/Address:\s+(\S+)/i)[1]; return `<strong>Peer address: <code>${addr}</code>.</strong> The IP address (or range) this keyring entry applies to. During IKEv2 negotiation, the router matches the remote peer's source IP against this address to select the correct pre-shared key.`; } },
   { match: /^Pre-shared key:\s+\*+/i,
     text: '<strong>Pre-shared key: (masked).</strong> The IKEv2 authentication key is configured but hidden in the display for security. Both peers must have matching pre-shared keys for IKE_AUTH to succeed. On a real router, use <code>show running-config</code> to see the actual key (if service password-encryption is not enabled).' },
   { match: /^PPK Manual:/i,
-    text: '<strong>PPK (Post-Quantum Pre-shared Key) configuration.</strong> Per RFC 8784, a manually-configured PPK is mixed into the IKEv2 key derivation to provide quantum resistance. The PPK adds entropy that is independent of the Diffie-Hellman exchange, so even if DH is broken by a quantum computer, the session keys remain secure.' },
+    text: '<strong>PPK (Post-Quantum Pre-shared Key) configuration.</strong> Per RFC 8784, a manually-configured PPK is mixed into the IKEv2 key derivation. (This is an alternative quantum-resistance approach; this tutorial uses ML-KEM hybrid key exchange instead.)' },
   { match: /^ID:\s+(\S+)/i,
-    text: (msg) => { const id = msg.match(/ID:\s+(\S+)/i)[1]; return `<strong>PPK ID: <code>${id}</code>.</strong> The identifier exchanged between peers during IKE_AUTH to agree on which pre-positioned PPK to use. Both peers must configure the same PPK ID with matching key material. The ID is transmitted in the clear; the key is never sent.`; } },
+    text: (msg) => { const id = msg.match(/ID:\s+(\S+)/i)[1]; return `<strong>PPK ID: <code>${id}</code>.</strong> The PPK identifier exchanged during IKE_AUTH (RFC 8784 approach).`; } },
   { match: /^Key:\s+\*+/i,
-    text: '<strong>PPK key material: (masked).</strong> The actual post-quantum key value. This key must be distributed out-of-band (e.g., physically, via QKD, or via a quantum-safe channel) and pre-configured on both peers. It is mixed into SKEYSEED derivation per RFC 8784 Section 3.' },
+    text: '<strong>PPK key material: (masked).</strong> The actual PPK key value (RFC 8784 approach).' },
   { match: /^Required:\s+(Yes|No)/i,
-    text: (msg) => { const req = msg.match(/:\s+(\S+)/i)[1]; return req==='Yes' ? '<strong>PPK Required: Yes.</strong> The tunnel will ONLY establish if the peer also supports PPK and the negotiation succeeds. If the peer does not send the USE_PPK notification, the IKEv2 session is aborted. This is the most secure setting — no fallback to classical-only crypto.' : '<strong>PPK Required: No.</strong> PPK is optional — if the peer supports it, PPK is used for quantum resistance. If not, the tunnel still establishes with standard (classical-only) crypto. This allows gradual migration but leaves the tunnel potentially unprotected against quantum attacks when the peer lacks PPK.'; } },
+    text: (msg) => { const req = msg.match(/:\s+(\S+)/i)[1]; return req==='Yes' ? '<strong>PPK Required: Yes.</strong> (RFC 8784 PPK approach.) The tunnel will ONLY establish if the peer also supports PPK.' : '<strong>PPK Required: No.</strong> (RFC 8784 PPK approach.) PPK is optional.'; } },
 
   // ─── show crypto ikev2 profile output lines ───
   { match: /^IKEv2 Profile:\s+(\S+)/i,
-    text: (msg) => { const name = msg.match(/:\s+(\S+)/i)[1]; return `<strong>IKEv2 Profile <code>${name}</code>.</strong> An IKEv2 profile is the central policy object that ties everything together: peer matching criteria, authentication method, authentication keyring, and PPK keyring. It is referenced by the crypto map to determine how to authenticate each peer.`; } },
+    text: (msg) => { const name = msg.match(/:\s+(\S+)/i)[1]; return `<strong>IKEv2 Profile <code>${name}</code>.</strong> An IKEv2 profile ties together: peer matching criteria, authentication method, and keyring references. It is referenced by the crypto map to determine how to authenticate each peer.`; } },
   { match: /^Match identity remote address:\s+(\S+)\s+(.*)/i,
     text: (msg) => { const m = msg.match(/address:\s+(\S+)\s+(\S+)/i); return `<strong>Match rule: remote address <code>${m[1]}</code> mask <code>${m[2]}</code>.</strong> When an IKEv2 initiation arrives, the router checks the source IP against this rule. If it matches, this profile's authentication settings are used. <code>255.255.255.255</code> = exact match (single host); broader masks allow ranges of peers.`; } },
   { match: /^Local authentication method:\s+(\S+)/i,
@@ -2434,7 +2440,7 @@ const CMD_EXPLANATIONS = [
   { match: /^Keyring \(local\):\s+(\S+)/i,
     text: (msg) => { const name = msg.match(/:\s+(\S+)/i)[1]; return `<strong>Authentication keyring: <code>${name}</code>.</strong> The IKEv2 keyring containing the pre-shared key used for standard IKEv2 authentication. The router looks up the peer's IP in this keyring to find the matching pre-shared key for the AUTH payload computation.`; } },
   { match: /^PPK Keyring:\s+(\S+)/i,
-    text: (msg) => { const name = msg.match(/:\s+(\S+)/i)[1]; return `<strong>PPK Keyring: <code>${name}</code>.</strong> The IKEv2 keyring containing the Post-Quantum Pre-shared Key (PPK) for this profile. This is the key element that enables quantum resistance per RFC 8784. The PPK from this keyring is mixed into session key derivation, adding entropy that a quantum computer cannot extract from the DH exchange.`; } },
+    text: (msg) => { const name = msg.match(/:\s+(\S+)/i)[1]; return `<strong>PPK Keyring: <code>${name}</code>.</strong> Links a PPK keyring for RFC 8784 quantum resistance. (This tutorial uses ML-KEM hybrid key exchange instead.)`; } },
 
   // ─── show clock output ───
   { match: /^\*?\d{2}:\d{2}:\d{2}\.\d{3}\s+UTC/i,
@@ -2456,7 +2462,7 @@ const CMD_EXPLANATIONS = [
   { match: /^No IKEv2 policies configured/i,
     text: '<strong>No IKEv2 policies exist.</strong> An IKEv2 policy links proposals to VRF matching criteria. Configure <code>crypto ikev2 policy</code> and add proposals to enable IKEv2 negotiation.' },
   { match: /^No IKEv2 keyrings configured/i,
-    text: '<strong>No IKEv2 keyrings exist.</strong> Configure <code>crypto ikev2 keyring</code> with peer entries containing pre-shared keys and optionally PPK for quantum resistance.' },
+    text: '<strong>No IKEv2 keyrings exist.</strong> Configure <code>crypto ikev2 keyring</code> with peer entries containing pre-shared keys for authentication.' },
   { match: /^No IKEv2 profiles configured/i,
     text: '<strong>No IKEv2 profiles exist.</strong> An IKEv2 profile ties together peer matching, authentication, and keyrings. Required for IKEv2-based VPN tunnels.' },
   { match: /^No crypto SA configured on any interface/i,
@@ -3129,8 +3135,8 @@ document.addEventListener('keydown', function(e) { if (e.key === 'Escape') docum
 </div>
 <script>
 (function(){
-  const TUTORIAL_NAME = 'Quantum-Safe VPN \u2014 IKEv2 PPK (RFC 8784)';
-  const STORAGE_KEY = 'pqc-vpn-ppk-feedback';
+  const TUTORIAL_NAME = 'Quantum-Safe VPN \u2014 ML-KEM (FIPS 203)';
+  const STORAGE_KEY = 'pqc-vpn-mlkem-feedback';
   const tab = document.getElementById('fb-tab');
   const panel = document.getElementById('fb-panel');
   const closeBtn = document.getElementById('fb-close');
@@ -3182,11 +3188,11 @@ document.addEventListener('keydown', function(e) { if (e.key === 'Escape') docum
     const progress = document.getElementById('nav-progress')?.textContent?.trim() || '';
     const ua = navigator.userAgent;
     const tunnel = typeof isVPNTunnelUp === 'function' ? isVPNTunnelUp(CELL_ID, 'r1', 'r2') : null;
-    const ppk = typeof checkPPKStatus === 'function' ? checkPPKStatus(CELL_ID, 'r1', 'r2') : null;
+    const mlkem = typeof checkMLKEMStatus === 'function' ? checkMLKEMStatus(CELL_ID, 'r1', 'r2') : null;
     let r1Cfg = '', r2Cfg = '';
     try { const d1 = iosDevices[CELL_ID+'_r1']; if(d1) r1Cfg = IOS.genCryptoConfig(d1).map(l => l.text).join('\n'); } catch(e) {}
     try { const d2 = iosDevices[CELL_ID+'_r2']; if(d2) r2Cfg = IOS.genCryptoConfig(d2).map(l => l.text).join('\n'); } catch(e) {}
-    return { step: stepEl?.textContent?.trim() || '(none)', progress, ua, tunnel: !!tunnel, ppk, r1Cfg, r2Cfg };
+    return { step: stepEl?.textContent?.trim() || '(none)', progress, ua, tunnel: !!tunnel, mlkem, r1Cfg, r2Cfg };
   }
 
   // Build formatted feedback report with debug context
@@ -3210,7 +3216,8 @@ document.addEventListener('keydown', function(e) { if (e.key === 'Escape') docum
     }
     body += '### Tunnel Status\n';
     body += '- VPN Tunnel: ' + (ctx.tunnel ? 'UP' : 'DOWN') + '\n';
-    body += '- Quantum-safe (PPK): ' + (ctx.ppk ? 'Yes (PPK ID: ' + ctx.ppk.ppkId + ')' : 'No') + '\n\n';
+    const mlkemAlg = ctx.mlkem && ctx.mlkem.algorithm ? ctx.mlkem.algorithm.toUpperCase().replace('MLKEM','ML-KEM-') : null;
+    body += '- Quantum-safe (ML-KEM): ' + (mlkemAlg ? 'Yes (' + mlkemAlg + ')' : 'No') + '\n\n';
     body += '### Router Configurations\n\n';
     body += '#### R1\n```\n' + (ctx.r1Cfg || '(no config)') + '\n```\n\n';
     body += '#### R2\n```\n' + (ctx.r2Cfg || '(no config)') + '\n```\n';

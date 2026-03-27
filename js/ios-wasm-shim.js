@@ -23,8 +23,9 @@
     // Initialize topology from the global constants defined in tutorial HTML
     const topoIfaces = {};
     for (const rKey of ROUTERS) {
-      topoIfaces[rKey] = TOPO_IFACES[rKey].map(ti => ({
-        name: ti.name,
+      const ifObj = TOPO_IFACES[rKey];
+      topoIfaces[rKey] = Object.entries(ifObj).map(([name, ti]) => ({
+        name: name,
         ip: ti.ip || '',
         mask: ti.mask || ''
       }));
