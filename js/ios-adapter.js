@@ -44,6 +44,9 @@
     }
   };
 
+  // ── History index state (persists across Proxy accesses) ──
+  const _histIdx = {};
+
   // ── iosDevices proxy — backed by WASM state ──
   window.iosDevices = new Proxy({}, {
     get(target, devId) {
@@ -58,12 +61,21 @@
         get hostname() { return Engine.getHostname(devId); },
         get crypto() { return Engine.getDeviceCryptoState(devId); },
         get interfaces() { return Engine.getDeviceInterfaces(devId); },
-        get ip() { return this._type === 'pc' ? '' : ''; }, // PCs handled separately
-        history: [], histIdx: -1, // Managed by WASM but exposed for arrow-key compat
+        get ip() { return this._type === 'pc' ? '' : ''; },
+        get history() {
+          const size = Engine.getHistorySize(devId);
+          const arr = [];
+          for (let i = 0; i < size; i++) arr.push(Engine.getHistoryAt(devId, i));
+          return arr;
+        },
+        get histIdx() { return _histIdx[devId] !== undefined ? _histIdx[devId] : -1; },
+        set histIdx(v) { _histIdx[devId] = v; }
       };
     },
     has(target, devId) { return true; },
-    set(target, devId, value) { return true; }
+    set(target, devId, value) { return true; },
+    // Allow property setting on returned objects (e.g., dev.histIdx = 5)
+    // This is handled by the getter/setter on the returned object itself
   });
 
   window.iosActiveTab = {};
