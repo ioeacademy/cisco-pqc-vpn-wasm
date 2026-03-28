@@ -1259,54 +1259,43 @@ function updateTopoOverlays() {
 
   // ── Layer 1: IP labels handled by updateTopoLabels() (blue, progressive) ──
 
-  // ── Layer 2: IKEv2 Proposal Badges ──
+  // Helper: format proposal/transform for one side
+  function fmtProp(prop) {
+    const enc = (prop.encryption || '').toUpperCase().replace('AES-CBC-','AES-').replace('-',' ');
+    const integ = (prop.integrity || '').toUpperCase();
+    const grp = prop.group || '?';
+    const dhLabel = {'14':'2048-bit MODP','15':'3072-bit MODP','16':'4096-bit MODP','19':'256-bit ECP','20':'384-bit ECP','21':'521-bit ECP'}[grp] || grp;
+    return ['Encryption: ' + enc + ' bit', 'Integrity: ' + integ, 'DH Group ' + grp + ' (' + dhLabel + ')'];
+  }
+  function fmtTs(ts) {
+    let espE = (ts.espEnc || '').toUpperCase().replace('ESP-','');
+    let espH = (ts.espHash || '').toUpperCase().replace('ESP-','').replace('-HMAC',' HMAC');
+    if (/^\d+$/.test(espH)) { espE = espE + '-' + espH; espH = 'SHA256 HMAC'; }
+    return ['Encrypt: ' + espE, 'Hash: ' + espH];
+  }
+
+  // Positions: top-left/right for R1/R2, stacked vertically
+  const r1Left = r.x - 10;
+  const r2Left = r.x + (r2Box.x + r2Box.w) * r.w + 10;
+  const badgeTopY = r.y + r1Box.y * r.h - 10;
+
+  // ── Layer 2: IKEv2 Proposal Badges (per-router) ──
   const prop1 = Object.values(d1.crypto?.ikev2Proposals || {})[0];
   const prop2 = Object.values(d2.crypto?.ikev2Proposals || {})[0];
-  if (prop1?.encryption && prop2?.encryption) {
-    const enc = (prop1.encryption || '').toUpperCase().replace('AES-CBC-','AES-').replace('-',' ');
-    const integ = (prop1.integrity || '').toUpperCase();
-    const grp = prop1.group || '?';
-    const dhLabel = {'14':'2048-bit MODP','15':'3072-bit MODP','16':'4096-bit MODP','19':'256-bit ECP','20':'384-bit ECP','21':'521-bit ECP'}[grp] || grp;
+  if (prop1?.encryption) addBadge('r1-prop', r1Left, badgeTopY, 'IKEv2 Proposal', fmtProp(prop1), '#1f6feb');
+  if (prop2?.encryption) addBadge('r2-prop', r2Left, badgeTopY, 'IKEv2 Proposal', fmtProp(prop2), '#1f6feb');
 
-    // Position: same height as routers, midway between border and router
-    const r1Left = r.x + r1Box.x * r.w * 0.5 - 40;
-    const r2Left = r.x + (r2Box.x + r2Box.w) * r.w + (r.x + r.w - (r.x + (r2Box.x + r2Box.w) * r.w)) * 0.2;
-
-    addBadge('r1-prop', r1Left, routerCY - 30, 'IKEv2 Proposal',
-      ['Encryption: ' + enc + ' bit', 'Integrity: ' + integ, 'DH Group ' + grp + ' (' + dhLabel + ')'], '#1f6feb');
-    addBadge('r2-prop', r2Left, routerCY - 30, 'IKEv2 Proposal',
-      ['Encryption: ' + enc + ' bit', 'Integrity: ' + integ, 'DH Group ' + grp + ' (' + dhLabel + ')'], '#1f6feb');
-  }
-
-  // ── Layer 3: Transform Set Badges ──
+  // ── Layer 3: Transform Set Badges (per-router) ──
   const ts1 = Object.values(d1.crypto?.transformSets || {})[0];
   const ts2 = Object.values(d2.crypto?.transformSets || {})[0];
-  if (ts1?.espEnc && ts2?.espEnc) {
-    let espE = (ts1.espEnc || '').toUpperCase().replace('ESP-','');
-    let espH = (ts1.espHash || '').toUpperCase().replace('ESP-','').replace('-HMAC',' HMAC');
-    // Handle case where key size is stored in espHash (WASM parser quirk)
-    if (/^\d+$/.test(espH)) { espE = espE + '-' + espH; espH = 'SHA256 HMAC'; }
-    const r1Left = r.x + r1Box.x * r.w * 0.5 - 40;
-    const r2Left = r.x + (r2Box.x + r2Box.w) * r.w + (r.x + r.w - (r.x + (r2Box.x + r2Box.w) * r.w)) * 0.2;
+  if (ts1?.espEnc) addBadge('r1-ts', r1Left, badgeTopY + 70, 'ESP Transform Set', fmtTs(ts1), '#2ea043');
+  if (ts2?.espEnc) addBadge('r2-ts', r2Left, badgeTopY + 70, 'ESP Transform Set', fmtTs(ts2), '#2ea043');
 
-    addBadge('r1-ts', r1Left, routerCY + 40, 'ESP Transform Set',
-      ['Encrypt: ' + espE, 'Hash: ' + espH], '#2ea043');
-    addBadge('r2-ts', r2Left, routerCY + 40, 'ESP Transform Set',
-      ['Encrypt: ' + espE, 'Hash: ' + espH], '#2ea043');
-  }
-
-  // ── Layer 4: IPSec Profile Badges ──
+  // ── Layer 4: IPSec Profile Badges (per-router) ──
   const ipProf1 = Object.values(d1.crypto?.ipsecProfiles || {})[0];
   const ipProf2 = Object.values(d2.crypto?.ipsecProfiles || {})[0];
-  if (ipProf1?.transformSet && ipProf2?.transformSet) {
-    const r1Left = r.x + r1Box.x * r.w * 0.5 - 40;
-    const r2Left = r.x + (r2Box.x + r2Box.w) * r.w + (r.x + r.w - (r.x + (r2Box.x + r2Box.w) * r.w)) * 0.2;
-
-    addBadge('r1-prof', r1Left, routerCY + 90, 'IPSec Profile',
-      ['Transform: ' + ipProf1.transformSet], '#d29922');
-    addBadge('r2-prof', r2Left, routerCY + 90, 'IPSec Profile',
-      ['Transform: ' + ipProf2.transformSet], '#d29922');
-  }
+  if (ipProf1?.transformSet) addBadge('r1-prof', r1Left, badgeTopY + 120, 'IPSec Profile', ['Transform: ' + ipProf1.transformSet], '#d29922');
+  if (ipProf2?.transformSet) addBadge('r2-prof', r2Left, badgeTopY + 120, 'IPSec Profile', ['Transform: ' + ipProf2.transformSet], '#d29922');
 
   // ── Layer 5: Tunnel0 IPs (SVG text) ──
   const tun1 = d1.interfaces?.['Tunnel0'];
@@ -1329,48 +1318,9 @@ function updateTopoOverlays() {
   }
 
   // ── Layer 6: Tunnel Arc + Animated Packets ──
-  const tunnelUp = isVPNTunnelUp(CELL_ID, 'r1', 'r2');
-  if (tunnelUp) {
-    const x1 = r.x + (r1Box.x + r1Box.w) * r.w;
-    const x2 = r.x + r2Box.x * r.w;
-    const yMid = r.y + (r1Box.y + r1Box.h * 0.35) * r.h;
-    const xMid = (x1 + x2) / 2;
-    const span = x2 - x1;
-    const arcH = span * 0.18;
-    const yArc = yMid - arcH;
-    const pathD = `M ${x1},${yMid} Q ${xMid},${yArc} ${x2},${yMid}`;
-
-    // Arc line
-    const arc = document.createElementNS(ns, 'path');
-    arc.setAttribute('d', pathD); arc.setAttribute('fill', 'none');
-    arc.setAttribute('stroke', '#2ea04380'); arc.setAttribute('stroke-width', '4');
-    arc.setAttribute('stroke-dasharray', '8,4');
-    svg.appendChild(arc);
-
-    // Label
-    const lbl = document.createElementNS(ns, 'text');
-    lbl.setAttribute('x', xMid); lbl.setAttribute('y', yArc - 6);
-    lbl.setAttribute('font-size', badgeFs + 'px'); lbl.setAttribute('fill', '#3fb950');
-    lbl.setAttribute('font-weight', '700'); lbl.setAttribute('text-anchor', 'middle');
-    lbl.textContent = 'IPSec VPN'; svg.appendChild(lbl);
-
-    // Animated dots
-    for (let i = 0; i < 4; i++) {
-      const dot = document.createElementNS(ns, 'circle');
-      dot.setAttribute('r', '3'); dot.setAttribute('fill', '#3fb950');
-      dot.setAttribute('class', 'packet-dot');
-      dot.style.offsetPath = `path('${pathD}')`; dot.style.animationDelay = (i * 0.6) + 's';
-      svg.appendChild(dot);
-    }
-    const pathDRev = `M ${x2},${yMid} Q ${xMid},${yArc + 6} ${x1},${yMid}`;
-    for (let i = 0; i < 4; i++) {
-      const dot = document.createElementNS(ns, 'circle');
-      dot.setAttribute('r', '2.5'); dot.setAttribute('fill', '#58a6ff');
-      dot.setAttribute('class', 'packet-dot');
-      dot.style.offsetPath = `path('${pathDRev}')`; dot.style.animationDelay = (i * 0.6 + 0.3) + 's';
-      svg.appendChild(dot);
-    }
-  }
+  // Handled by updateTunnelOverlay() which renders in tunnel-svg element
+  // Call it to ensure it's in sync
+  updateTunnelOverlay();
 }
 
 // Helper: convert mask to CIDR prefix
