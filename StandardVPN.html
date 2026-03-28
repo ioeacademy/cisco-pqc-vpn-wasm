@@ -44,6 +44,10 @@
     /* -- Tunnel overlay (SVG-based arc) -- */
     .tunnel-svg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; overflow: visible; }
     .tunnel-svg text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-weight: 600; text-anchor: middle; dominant-baseline: middle; }
+    .topo-overlay-svg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; overflow: visible; }
+    .topo-overlay-svg text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; dominant-baseline: middle; }
+    @keyframes packetFlow { 0% { offset-distance: 0%; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { offset-distance: 100%; opacity: 0; } }
+    .packet-dot { offset-rotate: 0deg; animation: packetFlow 2.5s linear infinite; }
 
     /* -- Show Me button -- */
     .step-showme-btn { display: inline-block; margin: 8px 0 4px; padding: 5px 14px; border: 1px solid #3fb950; border-radius: 4px; background: transparent; color: #3fb950; font-size: 12px; font-weight: 600; cursor: pointer; transition: background .15s, color .15s; }
@@ -1138,6 +1142,221 @@ function updateTunnelOverlay() {
   svg.appendChild(txt);
 }
 
+/* =====================================================================
+   PROGRESSIVE TOPOLOGY OVERLAYS
+   Layers build up as steps are completed:
+   Step 2: IP labels on interfaces
+   Step 3: IKEv2 Proposal badges
+   Step 4: Transform Set badges
+   Step 5: IPSec Profile linking
+   Step 6: Tunnel0 arc with IPs
+   Step 7: Animated packet flow
+===================================================================== */
+function updateTopoOverlays() {
+  const svg = document.getElementById('topo-overlay-svg');
+  if (!svg) return;
+  svg.innerHTML = '';
+
+  const container = document.getElementById('topo-diagram');
+  const img = container && container.querySelector('img');
+  if (!container || !img || !img.naturalWidth) return;
+  const r = getRenderedImageRect(img);
+  const topoH = container.clientHeight || 150;
+  const fs = Math.max(6, Math.round(9 * (topoH / 150))); // base font size
+  const ns = 'http://www.w3.org/2000/svg';
+
+  const d1 = iosDevices[CELL_ID+'_r1'], d2 = iosDevices[CELL_ID+'_r2'];
+  if (!d1 || !d2) return;
+
+  // Helper: create positioned text
+  function addText(nx, ny, text, opts={}) {
+    const el = document.createElementNS(ns, 'text');
+    el.setAttribute('x', r.x + nx * r.w);
+    el.setAttribute('y', r.y + ny * r.h);
+    el.setAttribute('font-size', (opts.size || fs) + 'px');
+    el.setAttribute('fill', opts.color || '#58a6ff');
+    el.setAttribute('font-weight', opts.bold ? '700' : '400');
+    if (opts.anchor) el.setAttribute('text-anchor', opts.anchor);
+    else el.setAttribute('text-anchor', 'middle');
+    el.textContent = text;
+    svg.appendChild(el);
+    return el;
+  }
+
+  // Helper: create a badge (rect + text)
+  function addBadge(nx, ny, lines, borderColor, bgColor) {
+    const bfs = fs * 0.85;
+    const lineH = bfs * 1.4;
+    const maxW = lines.reduce((m, l) => Math.max(m, l.length * bfs * 0.58), 0);
+    const padX = bfs * 0.7, padY = bfs * 0.4;
+    const bW = maxW + padX * 2;
+    const bH = lines.length * lineH + padY * 2;
+    const bx = r.x + nx * r.w - bW / 2;
+    const by = r.y + ny * r.h - bH / 2;
+
+    const rect = document.createElementNS(ns, 'rect');
+    rect.setAttribute('x', bx); rect.setAttribute('y', by);
+    rect.setAttribute('width', bW); rect.setAttribute('height', bH);
+    rect.setAttribute('rx', bfs * 0.35);
+    rect.setAttribute('fill', bgColor || '#161b22'); rect.setAttribute('fill-opacity', '0.92');
+    rect.setAttribute('stroke', borderColor); rect.setAttribute('stroke-width', '1.2');
+    svg.appendChild(rect);
+
+    lines.forEach((line, i) => {
+      const t = document.createElementNS(ns, 'text');
+      t.setAttribute('x', r.x + nx * r.w);
+      t.setAttribute('y', by + padY + lineH * (i + 0.65));
+      t.setAttribute('font-size', bfs + 'px');
+      t.setAttribute('fill', i === 0 ? '#f0f6fc' : '#8b949e');
+      t.setAttribute('font-weight', i === 0 ? '600' : '400');
+      t.setAttribute('text-anchor', 'middle');
+      t.textContent = line;
+      svg.appendChild(t);
+    });
+
+    return { x: bx, y: by, w: bW, h: bH, cx: r.x + nx * r.w, cy: r.y + ny * r.h };
+  }
+
+  // ── Layer 1: IP Address Labels (after step 2) ──
+  const r1gi = d1.interfaces?.['GigabitEthernet0/0'];
+  const r1se = d1.interfaces?.['Serial0/0/0'];
+  const r2gi = d2.interfaces?.['GigabitEthernet0/0'];
+  const r2se = d2.interfaces?.['Serial0/0/0'];
+  const hasIPs = r1gi?.ip && r1se?.ip && r2gi?.ip && r2se?.ip;
+
+  if (hasIPs) {
+    // Show IPs as colored labels near interfaces
+    addText(0.14, 0.58, r1gi.ip + '/' + cidrFromMask(r1gi.mask), {size: fs*0.75, color:'#3fb950'});
+    addText(0.33, 0.44, r1se.ip, {size: fs*0.75, color:'#3fb950'});
+    addText(0.86, 0.58, r2gi.ip + '/' + cidrFromMask(r2gi.mask), {size: fs*0.75, color:'#3fb950'});
+    addText(0.60, 0.44, r2se.ip, {size: fs*0.75, color:'#3fb950'});
+  }
+
+  // ── Layer 2: IKEv2 Proposal Badge (after step 3) ──
+  const prop1 = Object.values(d1.crypto?.ikev2Proposals || {})[0];
+  const prop2 = Object.values(d2.crypto?.ikev2Proposals || {})[0];
+  const hasProposal = prop1?.encryption && prop2?.encryption;
+
+  let r1Badge, r2Badge;
+  if (hasProposal) {
+    const enc = (prop1.encryption || '').toUpperCase().replace('AES-CBC-','AES-');
+    const integ = (prop1.integrity || '').toUpperCase().replace('SHA','SHA-');
+    const grp = 'DH Group ' + (prop1.group || '?');
+    r1Badge = addBadge(0.05, 0.78, ['IKEv2 Proposal', enc + ' ' + integ, grp], '#1f6feb', '#0d1117');
+    r2Badge = addBadge(0.95, 0.78, ['IKEv2 Proposal', enc + ' ' + integ, grp], '#1f6feb', '#0d1117');
+  }
+
+  // ── Layer 3: Transform Set Badge (after step 4) ──
+  const ts1 = Object.values(d1.crypto?.transformSets || {})[0];
+  const ts2 = Object.values(d2.crypto?.transformSets || {})[0];
+  const hasTransform = ts1?.espEnc && ts2?.espEnc;
+
+  let r1TsBadge, r2TsBadge;
+  if (hasTransform && hasProposal) {
+    const espE = (ts1.espEnc || '').toUpperCase().replace('ESP-','');
+    const espH = (ts1.espHash || '').toUpperCase().replace('ESP-','');
+    r1TsBadge = addBadge(0.05, 0.93, ['ESP Transform', espE + ' + ' + espH], '#2ea043', '#0d1117');
+    r2TsBadge = addBadge(0.95, 0.93, ['ESP Transform', espE + ' + ' + espH], '#2ea043', '#0d1117');
+  }
+
+  // ── Layer 4: IPSec Profile Linking (after step 5) ──
+  const ipProf1 = Object.values(d1.crypto?.ipsecProfiles || {})[0];
+  const ipProf2 = Object.values(d2.crypto?.ipsecProfiles || {})[0];
+  const hasProfile = ipProf1?.transformSet && ipProf2?.transformSet;
+
+  if (hasProfile && r1Badge && r1TsBadge) {
+    // Draw connecting bracket on each side
+    [
+      {badge: r1Badge, ts: r1TsBadge, side: 'right'},
+      {badge: r2Badge, ts: r2TsBadge, side: 'left'}
+    ].forEach(({badge, ts, side}) => {
+      if (!badge || !ts) return;
+      const bx = side === 'right' ? badge.x + badge.w + 2 : badge.x - 2;
+      const line = document.createElementNS(ns, 'path');
+      const my = (badge.cy + ts.cy) / 2;
+      const dx = side === 'right' ? 8 : -8;
+      line.setAttribute('d', `M ${bx},${badge.cy} L ${bx+dx},${badge.cy} L ${bx+dx},${ts.cy} L ${bx},${ts.cy}`);
+      line.setAttribute('fill', 'none');
+      line.setAttribute('stroke', '#d29922');
+      line.setAttribute('stroke-width', '1.2');
+      line.setAttribute('stroke-dasharray', '3,2');
+      svg.appendChild(line);
+      const label = document.createElementNS(ns, 'text');
+      label.setAttribute('x', bx + dx * 1.5);
+      label.setAttribute('y', my);
+      label.setAttribute('font-size', (fs * 0.7) + 'px');
+      label.setAttribute('fill', '#d29922');
+      label.setAttribute('font-weight', '600');
+      label.setAttribute('text-anchor', side === 'right' ? 'start' : 'end');
+      label.textContent = 'IPSec Profile';
+      svg.appendChild(label);
+    });
+  }
+
+  // ── Layer 5: Tunnel0 IPs (after step 6) ──
+  const tun1 = d1.interfaces?.['Tunnel0'];
+  const tun2 = d2.interfaces?.['Tunnel0'];
+  const hasTunnel = tun1?.ip && tun2?.ip && tun1.tunnelConfig?.ipsecProfile;
+
+  if (hasTunnel) {
+    // Show Tunnel0 IPs near the arc endpoints
+    const r1Box = HOTSPOT_DEFS['box-r1'], r2Box = HOTSPOT_DEFS['box-r2'];
+    addText(r1Box.x + r1Box.w + 0.02, 0.14, 'Tun0: ' + tun1.ip, {size: fs*0.75, color:'#d29922', anchor:'start'});
+    addText(r2Box.x - 0.02, 0.14, 'Tun0: ' + tun2.ip, {size: fs*0.75, color:'#d29922', anchor:'end'});
+  }
+
+  // ── Layer 6: Animated Packets (after step 7 — tunnel is up + verified) ──
+  const tunnelUp = isVPNTunnelUp(CELL_ID, 'r1', 'r2');
+  if (tunnelUp && hasTunnel) {
+    const r1Box = HOTSPOT_DEFS['box-r1'], r2Box = HOTSPOT_DEFS['box-r2'];
+    const x1 = r.x + (r1Box.x + r1Box.w) * r.w;
+    const x2 = r.x + r2Box.x * r.w;
+    const yMid = r.y + (r1Box.y + r1Box.h * 0.35) * r.h;
+    const xMid = (x1 + x2) / 2;
+    const span = x2 - x1;
+    const arcH = span * 0.18;
+    const yArc = yMid - arcH;
+    const pathD = `M ${x1},${yMid} Q ${xMid},${yArc} ${x2},${yMid}`;
+
+    // Create path definition for offset-path
+    const defs = document.createElementNS(ns, 'defs');
+    const pathEl = document.createElementNS(ns, 'path');
+    pathEl.setAttribute('id', 'packet-path');
+    pathEl.setAttribute('d', pathD);
+    defs.appendChild(pathEl);
+    svg.appendChild(defs);
+
+    // Add 4 animated dots with staggered delays
+    for (let i = 0; i < 4; i++) {
+      const dot = document.createElementNS(ns, 'circle');
+      dot.setAttribute('r', '3');
+      dot.setAttribute('fill', '#3fb950');
+      dot.setAttribute('class', 'packet-dot');
+      dot.style.offsetPath = `path('${pathD}')`;
+      dot.style.animationDelay = (i * 0.6) + 's';
+      svg.appendChild(dot);
+    }
+    // Return direction dots
+    const pathDRev = `M ${x2},${yMid} Q ${xMid},${yArc + 6} ${x1},${yMid}`;
+    for (let i = 0; i < 4; i++) {
+      const dot = document.createElementNS(ns, 'circle');
+      dot.setAttribute('r', '2.5');
+      dot.setAttribute('fill', '#58a6ff');
+      dot.setAttribute('class', 'packet-dot');
+      dot.style.offsetPath = `path('${pathDRev}')`;
+      dot.style.animationDelay = (i * 0.6 + 0.3) + 's';
+      svg.appendChild(dot);
+    }
+  }
+}
+
+// Helper: convert mask to CIDR prefix
+function cidrFromMask(mask) {
+  if (!mask) return '';
+  return mask.split('.').reduce((c, o) => c + (parseInt(o) >>> 0).toString(2).replace(/0/g, '').length, 0);
+}
+function maskToBits(m) { return cidrFromMask(m); }
+
 function cheatBadge() {
   // Secret: run all tutorial steps in sequence then show badge
   let delay = 0;
@@ -1224,6 +1443,7 @@ function iosSubmit(rKey, raw) {
   outEl.scrollTop=outEl.scrollHeight;
 
   updateTunnelOverlay();
+  updateTopoOverlays();
   updateTopoLabels();
 
   if (typeof currentStep!=='undefined' && !completedSteps.has(currentStep)) {
@@ -1325,6 +1545,7 @@ function iosResetAll() {
   const banner = document.getElementById('completion-banner');
   if (banner) banner.style.display = 'none';
   if (typeof updateTunnelOverlay === 'function') updateTunnelOverlay();
+  if (typeof updateTopoOverlays === 'function') updateTopoOverlays();
 }
 
 function updateTopoLabels() {
@@ -1389,6 +1610,7 @@ function repositionHotspots() {
     el.style.height = (d.h * r.h) + 'px';
   }
   updateTunnelOverlay();
+  updateTopoOverlays();
 }
 
 function scaleTopoLabels(topoH) {
@@ -1399,6 +1621,7 @@ function scaleTopoLabels(topoH) {
     el.style.fontSize = Math.max(7, Math.round(base * ratio)) + 'px';
   });
   updateTunnelOverlay();
+  updateTopoOverlays();
 }
 
 if (typeof ResizeObserver !== 'undefined') {
@@ -2573,6 +2796,7 @@ document.addEventListener('wasm-ready', function() {
       <div class="topo-label topo-ip" id="lbl-r2-gi0-ip"></div>
       <div class="topo-label topo-ip" id="lbl-pc1-ip"></div>
       <div class="topo-label topo-ip" id="lbl-pc2-ip"></div>
+      <svg class="topo-overlay-svg" id="topo-overlay-svg"></svg>
       <svg class="tunnel-svg" id="tunnel-svg"></svg>
     </div>
 
@@ -2707,6 +2931,7 @@ document.addEventListener('wasm-ready', function() {
   updateProgress();
   restoreFontSize();
   updateTunnelOverlay();
+  updateTopoOverlays();
 
   const topoImg = document.querySelector('#topo-diagram img');
   if (topoImg) {
