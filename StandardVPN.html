@@ -345,7 +345,7 @@ const TOPO_LINKS = [
 ];
 </script>
 <!-- Unified C++/WASM IOS Engine -->
-<script src="dist/ios-engine.js"></script>
+<script src="dist/ios-engine.js?v=3"></script>
 <script src="js/ios-adapter.js"></script>
 <script>
 /* =====================================================================
@@ -1320,8 +1320,12 @@ function updateTopoOverlays() {
       el.setAttribute('font-weight', '600'); el.setAttribute('text-anchor', opts.anchor || 'middle');
       el.textContent = text; svg.appendChild(el);
     };
-    addSvgText(r1Box.x + r1Box.w + 0.03, 0.10, 'Tunnel0: ' + tun1.ip, {anchor:'start'});
-    addSvgText(r2Box.x - 0.03, 0.10, 'Tunnel0: ' + tun2.ip, {anchor:'end'});
+    // Align with center of each router, 10px above
+    const r1cx = r1Box.x + r1Box.w * 0.5;
+    const r2cx = r2Box.x + r2Box.w * 0.5;
+    const tunY = r1Box.y - 0.02; // just above router boxes
+    addSvgText(r1cx, tunY, 'Tunnel0: ' + tun1.ip, {anchor:'middle'});
+    addSvgText(r2cx, tunY, 'Tunnel0: ' + tun2.ip, {anchor:'middle'});
   }
 
   // ── Layer 6: Tunnel Arc + Animated Packets ──

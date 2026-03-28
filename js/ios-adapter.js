@@ -5,7 +5,9 @@
 (async function() {
   'use strict';
 
-  const Engine = await IOSEngineModule();
+  const Engine = await IOSEngineModule({
+    locateFile: function(path) { return 'dist/' + path + '?v=' + Date.now(); }
+  });
   console.log('[WASM] IOS Engine loaded');
 
   // Initialize topology from tutorial constants
