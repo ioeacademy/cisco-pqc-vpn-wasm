@@ -2930,7 +2930,7 @@ document.addEventListener('wasm-ready', function() {
       if (e.key==='Tab') {
         e.preventDefault();
         const result = handleTabComplete(devId, input.value);
-        if (result !== null) input.value = result;
+        if (result && result.length > 0) input.value = result;
         syncMirror();
         return;
       }
