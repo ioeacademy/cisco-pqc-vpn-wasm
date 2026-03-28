@@ -2,6 +2,34 @@
  * IOS WASM Adapter — maps WASM engine to globals the tutorial HTML expects.
  * This is the ONLY bridge needed. No ios-engine-base.js or ios-engine-extended.js.
  */
+
+/* ── Utility functions (previously in ios-engine-base.js) ── */
+window.maskToBits = function(mask) {
+  if (!mask) return 0;
+  return mask.split('.').reduce((bits, octet) => bits + (parseInt(octet) >>> 0).toString(2).split('1').length - 1, 0);
+};
+window.cidrFromMask = window.maskToBits;
+window.validIP = function(ip) {
+  if (!ip || typeof ip !== 'string') return false;
+  const parts = ip.split('.');
+  if (parts.length !== 4) return false;
+  return parts.every(p => { const n = parseInt(p); return !isNaN(n) && n >= 0 && n <= 255 && String(n) === p; });
+};
+window.networkOf = function(ip, mask) {
+  if (!ip || !mask) return '';
+  const ipParts = ip.split('.').map(Number);
+  const maskParts = mask.split('.').map(Number);
+  return ipParts.map((p, i) => p & maskParts[i]).join('.');
+};
+window.getRenderedImageRect = function(img) {
+  const cw = img.clientWidth, ch = img.clientHeight;
+  const nw = img.naturalWidth, nh = img.naturalHeight;
+  const ratio = Math.min(cw / nw, ch / nh);
+  const w = nw * ratio, h = nh * ratio;
+  return { x: (cw - w) / 2, y: (ch - h) / 2, w, h };
+};
+window.fmtPwd = function(dev, pwd) { return pwd || ''; };
+
 (async function() {
   'use strict';
 
