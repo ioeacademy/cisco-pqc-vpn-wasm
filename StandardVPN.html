@@ -1274,10 +1274,11 @@ function updateTopoOverlays() {
     return ['Encrypt: ' + espE, 'Hash: ' + espH];
   }
 
-  // Positions: top-left/right for R1/R2, stacked vertically
-  const r1Left = r.x - 10;
-  const r2Left = r.x + (r2Box.x + r2Box.w) * r.w + 10;
-  const badgeTopY = r.y + r1Box.y * r.h - 10;
+  // Positions: far left for R1, far right for R2, stacked vertically at router height
+  const badgeW = 180; // approximate badge width
+  const r1Left = Math.max(0, r.x - badgeW - 15);
+  const r2Left = r.x + r.w + 15;
+  const badgeTopY = r.y + r1Box.y * r.h;
 
   // ── Layer 2: IKEv2 Proposal Badges (per-router) ──
   const prop1 = Object.values(d1.crypto?.ikev2Proposals || {})[0];
@@ -1288,14 +1289,16 @@ function updateTopoOverlays() {
   // ── Layer 3: Transform Set Badges (per-router) ──
   const ts1 = Object.values(d1.crypto?.transformSets || {})[0];
   const ts2 = Object.values(d2.crypto?.transformSets || {})[0];
-  if (ts1?.espEnc) addBadge('r1-ts', r1Left, badgeTopY + 70, 'ESP Transform Set', fmtTs(ts1), '#2ea043');
-  if (ts2?.espEnc) addBadge('r2-ts', r2Left, badgeTopY + 70, 'ESP Transform Set', fmtTs(ts2), '#2ea043');
+  // Stack spacing based on badge font size
+  const stackGap = badgeFs * 5.5;
+  if (ts1?.espEnc) addBadge('r1-ts', r1Left, badgeTopY + stackGap, 'ESP Transform Set', fmtTs(ts1), '#2ea043');
+  if (ts2?.espEnc) addBadge('r2-ts', r2Left, badgeTopY + stackGap, 'ESP Transform Set', fmtTs(ts2), '#2ea043');
 
   // ── Layer 4: IPSec Profile Badges (per-router) ──
   const ipProf1 = Object.values(d1.crypto?.ipsecProfiles || {})[0];
   const ipProf2 = Object.values(d2.crypto?.ipsecProfiles || {})[0];
-  if (ipProf1?.transformSet) addBadge('r1-prof', r1Left, badgeTopY + 120, 'IPSec Profile', ['Transform: ' + ipProf1.transformSet], '#d29922');
-  if (ipProf2?.transformSet) addBadge('r2-prof', r2Left, badgeTopY + 120, 'IPSec Profile', ['Transform: ' + ipProf2.transformSet], '#d29922');
+  if (ipProf1?.transformSet) addBadge('r1-prof', r1Left, badgeTopY + stackGap * 2, 'IPSec Profile', ['Transform: ' + ipProf1.transformSet], '#d29922');
+  if (ipProf2?.transformSet) addBadge('r2-prof', r2Left, badgeTopY + stackGap * 2, 'IPSec Profile', ['Transform: ' + ipProf2.transformSet], '#d29922');
 
   // ── Layer 5: Tunnel0 IPs (SVG text) ──
   const tun1 = d1.interfaces?.['Tunnel0'];
