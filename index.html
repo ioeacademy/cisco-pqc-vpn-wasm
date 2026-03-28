@@ -3,23 +3,28 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PQC VPN Tutorials — WebAssembly Engine</title>
+<title>Cisco IOS XE VPN Tutorials — Cisco Networking Academy</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; }
+  body { background: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 40px 20px; }
   h1 { font-size: 28px; color: #f0f6fc; margin-bottom: 8px; text-align: center; }
-  .subtitle { font-size: 14px; color: #8b949e; margin-bottom: 32px; text-align: center; }
+  .subtitle { font-size: 14px; color: #8b949e; margin-bottom: 32px; text-align: center; max-width: 600px; line-height: 1.6; }
   .badge { display: inline-block; background: #238636; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; margin-left: 8px; vertical-align: middle; }
-  .cards { display: flex; gap: 24px; flex-wrap: wrap; justify-content: center; max-width: 800px; }
-  .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 28px 24px; width: 360px; text-decoration: none; color: inherit; transition: border-color .2s, transform .15s, box-shadow .2s; }
+  .section-label { font-size: 12px; color: #8b949e; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; margin-top: 24px; }
+  .cards { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; max-width: 1100px; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 24px 22px; width: 340px; text-decoration: none; color: inherit; transition: border-color .2s, transform .15s, box-shadow .2s; position: relative; }
   .card:hover { border-color: #58a6ff; transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,.4); }
-  .card h2 { font-size: 18px; color: #f0f6fc; margin-bottom: 8px; }
-  .card .tag { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; margin-bottom: 12px; }
+  .card h2 { font-size: 17px; color: #f0f6fc; margin-bottom: 8px; }
+  .card .tag { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; margin-bottom: 10px; }
+  .tag-standard { background: #da363322; color: #f85149; border: 1px solid #da363344; }
   .tag-ppk { background: #1f6feb22; color: #58a6ff; border: 1px solid #1f6feb44; }
   .tag-mlkem { background: #23863622; color: #3fb950; border: 1px solid #23863644; }
-  .card p { font-size: 13px; color: #8b949e; line-height: 1.6; margin-bottom: 14px; }
-  .card .features { font-size: 12px; color: #6e7681; }
+  .card p { font-size: 13px; color: #8b949e; line-height: 1.6; margin-bottom: 12px; }
+  .card .features { font-size: 11px; color: #6e7681; }
   .card .features span { display: inline-block; background: #21262d; padding: 2px 6px; border-radius: 4px; margin: 2px 2px; }
+  .prereq { font-size: 11px; color: #484f58; margin-top: 10px; padding-top: 8px; border-top: 1px solid #21262d; }
+  .prereq strong { color: #8b949e; }
+  .arrow-connector { display: flex; align-items: center; justify-content: center; margin: 16px 0 8px; color: #30363d; font-size: 20px; }
   .footer { margin-top: 40px; font-size: 12px; color: #484f58; text-align: center; }
   .footer a { color: #58a6ff; text-decoration: none; }
   .footer a:hover { text-decoration: underline; }
@@ -27,9 +32,27 @@
 </head>
 <body>
 
-<h1>Quantum-Safe VPN Tutorials <span class="badge">WASM</span></h1>
-<p class="subtitle">Post-Quantum Cryptography on Cisco IOS XE — powered by WebAssembly</p>
+<h1>Cisco IOS XE VPN Tutorials <span class="badge">v2.0</span></h1>
+<p class="subtitle">Learn to configure IPSec VPNs on Cisco IOS XE routers — from classical VPN to quantum-safe encryption. Interactive simulator powered by WebAssembly.</p>
 
+<p class="section-label">Start Here</p>
+<div class="cards">
+  <a class="card" href="StandardVPN.html">
+    <span class="tag tag-standard">Foundation</span>
+    <h2>IPSec VPN with VTI</h2>
+    <p>Configure a site-to-site IKEv2 IPSec VPN using Virtual Tunnel Interfaces — the modern replacement for deprecated crypto maps.</p>
+    <div class="features">
+      <span>8 steps</span>
+      <span>IOS XE simulator</span>
+      <span>IKEv2 + VTI</span>
+      <span>Completion badge</span>
+    </div>
+  </a>
+</div>
+
+<div class="arrow-connector">&#x25BC; then choose your quantum-safe path &#x25BC;</div>
+
+<p class="section-label">Post-Quantum Cryptography</p>
 <div class="cards">
   <a class="card" href="TutorialPPKmanual.html">
     <span class="tag tag-ppk">RFC 8784</span>
@@ -41,6 +64,7 @@
       <span>Fault injection</span>
       <span>Completion badge</span>
     </div>
+    <div class="prereq"><strong>Prerequisite:</strong> IPSec VPN with VTI (steps 1-7 included)</div>
   </a>
   <a class="card" href="TutorialMLKEM.html">
     <span class="tag tag-mlkem">FIPS 203</span>
@@ -52,14 +76,13 @@
       <span>Fault injection</span>
       <span>Completion badge</span>
     </div>
+    <div class="prereq"><strong>Prerequisite:</strong> IPSec VPN with VTI (steps 1-7 included)</div>
   </a>
 </div>
 
 <div class="footer">
   <p>Created by G5 (Giuseppe Cinque) in collaboration with AI</p>
   <p style="margin-top: 6px;">
-    <a href="https://ioeacademy.github.io/cisco-pqc-vpn-ppk/">PPK (JS version)</a> &middot;
-    <a href="https://ioeacademy.github.io/cisco-pqc-vpn-mlkem/">ML-KEM (JS version)</a> &middot;
     <a href="https://github.com/ioeacademy/cisco-pqc-vpn-wasm">GitHub</a>
   </p>
 </div>
