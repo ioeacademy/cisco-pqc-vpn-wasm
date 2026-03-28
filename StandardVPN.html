@@ -304,7 +304,7 @@
   <div class="nav-sep"></div>
   <span class="tutorial-badge">v2.0</span>
   <span class="nav-title">IPSec VPN &mdash; IKEv2 with VTI on Cisco IOS XE</span>
-  <span class="nav-progress" id="nav-progress">0 / 8</span>
+  <span class="nav-progress" id="nav-progress">0 / 9</span>
 </div>
 
 <div class="split-container">
@@ -538,7 +538,80 @@ crypto isakmp key cisco123 address 10.10.10.1
   ]
 },
 
-/* -- Step 4: IPSec Transform Set (IKE Phase 2) -- */
+/* -- Step 4: IKEv2 Keyring & Profile (Authentication) -- */
+{
+  title:'IKEv2 Keyring & Profile (Authentication)',
+  type:'config', part:'base', router:'both',
+  instruction:`### Step 4 — IKEv2 Authentication: Keyring & Profile
+
+> **Concept:** The IKEv2 **keyring** stores pre-shared keys per peer, and the IKEv2 **profile** defines how authentication is performed — linking the keyring and specifying local/remote authentication methods.
+
+#### On R1 — create keyring pointing to R2:
+\`\`\`
+configure terminal
+crypto ikev2 keyring VPN-KEYRING
+ peer R2
+  address 11.11.11.1
+  pre-shared-key cisco
+  exit
+ exit
+\`\`\`
+
+#### Then create the IKEv2 profile:
+\`\`\`
+crypto ikev2 profile PQC-IKE-PROFILE
+ match identity remote address 11.11.11.1
+ authentication local pre-share
+ authentication remote pre-share
+ keyring local VPN-KEYRING
+ exit
+end
+\`\`\`
+
+#### On R2 — same but pointing to R1:
+\`\`\`
+configure terminal
+crypto ikev2 keyring VPN-KEYRING
+ peer R1
+  address 10.10.10.1
+  pre-shared-key cisco
+  exit
+ exit
+crypto ikev2 profile PQC-IKE-PROFILE
+ match identity remote address 10.10.10.1
+ authentication local pre-share
+ authentication remote pre-share
+ keyring local VPN-KEYRING
+ exit
+end
+\`\`\`
+
+> - \`crypto ikev2 keyring\` = Named container for peer pre-shared keys
+> - \`peer R2\` + \`address\` + \`pre-shared-key\` = Associates a PSK with a specific peer IP
+> - \`crypto ikev2 profile\` = Defines the authentication method and links the keyring
+> - \`match identity remote address\` = Identifies the remote peer by IP
+> - \`authentication local/remote pre-share\` = Both sides use pre-shared key auth
+> - \`keyring local\` = Links the keyring containing the PSK`,
+  commands: {
+    r1: ['configure terminal','crypto ikev2 keyring VPN-KEYRING','peer R2','address 11.11.11.1','pre-shared-key cisco','exit','exit','crypto ikev2 profile PQC-IKE-PROFILE','match identity remote address 11.11.11.1','authentication local pre-share','authentication remote pre-share','keyring local VPN-KEYRING','exit','end'],
+    r2: ['configure terminal','crypto ikev2 keyring VPN-KEYRING','peer R1','address 10.10.10.1','pre-shared-key cisco','exit','exit','crypto ikev2 profile PQC-IKE-PROFILE','match identity remote address 10.10.10.1','authentication local pre-share','authentication remote pre-share','keyring local VPN-KEYRING','exit','end']
+  },
+  validate:()=>{
+    const d1=iosDevices[CELL_ID+'_r1'], d2=iosDevices[CELL_ID+'_r2'];
+    if(!d1||!d2) return false;
+    const kr1=d1.crypto.ikev2Keyrings?.['VPN-KEYRING'], kr2=d2.crypto.ikev2Keyrings?.['VPN-KEYRING'];
+    const prof1=d1.crypto.ikev2Profiles?.['PQC-IKE-PROFILE'], prof2=d2.crypto.ikev2Profiles?.['PQC-IKE-PROFILE'];
+    return !!(kr1 && kr2 && prof1?.authLocal && prof2?.authLocal && prof1?.keyringLocal && prof2?.keyringLocal);
+  },
+  hints:[
+    { detect:(dev,cmd)=>cmd.match(/pre-shared-key/i) && dev._rKey==='r1' && !cmd.match(/cisco/i),
+      message:'Use <code>pre-shared-key cisco</code> — both sides must use the same key.', type:'nudge' },
+    { detect:(dev,cmd)=>cmd.match(/address\s+10\.10\.10\.1/i) && dev._rKey==='r1',
+      message:'On R1, the peer address should be R2\'s IP: <code>11.11.11.1</code> (not R1\'s own IP).', type:'warning' },
+  ]
+},
+
+/* -- Step 5: IPSec Transform Set (IKE Phase 2) -- */
 {
   title:'IPSec Transform Set (IKE Phase 2)',
   type:'config', part:'base', router:'both',
@@ -1278,7 +1351,7 @@ function updateTopoOverlays() {
   const badgeW = 180; // approximate badge width
   const r1Left = Math.max(0, r.x - badgeW - 15);
   const r2Left = r.x + r.w + 15;
-  const badgeTopY = r.y + r1Box.y * r.h;
+  const badgeTopY = r.y + r1Box.y * r.h - 15;
 
   // ── Layer 2: IKEv2 Proposal Badges (per-router) ──
   const prop1 = Object.values(d1.crypto?.ikev2Proposals || {})[0];
