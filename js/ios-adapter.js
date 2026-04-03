@@ -48,13 +48,41 @@ window.fmtPwd = function(dev, pwd) { return pwd || ''; };
 
   // ── Global function mappings ──
   window.handleCmd = (devId, raw) => {
-    // Shim: accept 'set pfs' in ipsec-profile mode (not yet in WASM engine)
     const trimmed = raw.trim().toLowerCase();
+    // Shim: accept 'set pfs' in ipsec-profile mode (not yet in WASM engine)
     if (trimmed === 'set pfs' || trimmed.startsWith('set pfs ')) {
       const mode = Engine.getDeviceMode(devId);
       if (mode === 'config-ipsec-profile') return [];
     }
-    return Engine.handleCmd(devId, raw);
+    const result = Engine.handleCmd(devId, raw);
+    // Shim: inject Profile + Uptime into 'show crypto session' output
+    if (trimmed.match(/^show\s+crypto\s+session/)) {
+      const crypto = Engine.getDeviceCryptoState(devId);
+      const ifaces = Engine.getDeviceInterfaces(devId) || {};
+      // Find profile name from ipsec profile → ikev2 profile chain
+      let profileName = '';
+      const t0 = ifaces['Tunnel0'];
+      if (t0 && t0.tunnelConfig && t0.tunnelConfig.ipsecProfile) {
+        const ipProf = crypto.ipsecProfiles?.[t0.tunnelConfig.ipsecProfile];
+        if (ipProf && ipProf.ikev2Profile) profileName = ipProf.ikev2Profile;
+      }
+      // Find the "Interface:" line and inject Profile + Uptime after it
+      for (let i = 0; i < result.length; i++) {
+        const txt = typeof result[i] === 'object' ? result[i].text : result[i];
+        if (txt && txt.startsWith('Interface:')) {
+          const upSec = crypto.saEstablishedAt > 0 ? Math.floor((Date.now() - crypto.saEstablishedAt) / 1000) : 0;
+          const hh = String(Math.floor(upSec / 3600)).padStart(2, '0');
+          const mm = String(Math.floor((upSec % 3600) / 60)).padStart(2, '0');
+          const ss = String(upSec % 60).padStart(2, '0');
+          const extra = [];
+          if (profileName) extra.push({text: 'Profile: ' + profileName, cls: ''});
+          extra.push({text: 'Uptime: ' + hh + ':' + mm + ':' + ss, cls: ''});
+          result.splice(i + 1, 0, ...extra);
+          break;
+        }
+      }
+    }
+    return result;
   };
   window.handlePcCmd = (devId, raw) => Engine.handlePcCmd(devId, raw);
   window.getPrompt = (dev) => {
