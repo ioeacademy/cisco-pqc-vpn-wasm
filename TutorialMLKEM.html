@@ -334,7 +334,7 @@ const TOPO_LINKS = [
 </script>
 <!-- Unified C++/WASM IOS Engine -->
 <script src="dist/ios-engine.js?v=5"></script>
-<script src="js/ios-adapter.js?v=8"></script>
+<script src="js/ios-adapter.js?v=9"></script>
 <script>
 /* =====================================================================
    TUTORIAL STEPS DEFINITION — Post-Quantum Cryptography VPN (ML-KEM Variant)
@@ -1613,7 +1613,14 @@ const CMD_LEARN_LINKS = {
   'quantum resistance': { url: 'https://csrc.nist.gov/pubs/fips/203/final', label: 'NIST FIPS 203 — ML-KEM Standard' },
 
   // Step 6+: Show & Verify
+  'show crypto session': { url: 'https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/security/s1/sec-s1-cr-book/sec-cr-s2.html#wp2636518498', label: 'Cisco Security Cmd Ref — show crypto session' },
   'show crypto':      { url: 'https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/security/s1/sec-s1-cr-book/sec-cr-s2.html', label: 'Cisco Security Cmd Ref — show crypto' },
+  'session status':   { url: 'https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/security/s1/sec-s1-cr-book/sec-cr-s2.html#wp2636518498', label: 'Cisco Security Cmd Ref — show crypto session' },
+  'ike sa':           { url: 'https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/security/s1/sec-s1-cr-book/sec-cr-s2.html#wp2636518498', label: 'Cisco Security Cmd Ref — show crypto session' },
+  'ipsec flow':       { url: 'https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/security/s1/sec-s1-cr-book/sec-cr-s2.html#wp2636518498', label: 'Cisco Security Cmd Ref — show crypto session' },
+  'active sas':       { url: 'https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/security/s1/sec-s1-cr-book/sec-cr-s2.html#wp2636518498', label: 'Cisco Security Cmd Ref — show crypto session' },
+  'profile:':         { url: 'https://www.cisco.com/c/en/us/td/docs/routers/ios/config/17-x/sec-vpn/b-security-vpn/m_sec-cfg-ikev2-flex.html#task_20288C58E8B1416897A763FABA8B0885', label: 'Cisco IOS XE 17.x — Configuring IKEv2 Profile' },
+  'uptime:':          { url: 'https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/security/s1/sec-s1-cr-book/sec-cr-s2.html#wp2636518498', label: 'Cisco Security Cmd Ref — show crypto session' },
 
   // Step 3-4: IKEv2 Keyring, Profile & ML-KEM hybrid key exchange
   'crypto ikev2 keyring':  { url: 'https://www.cisco.com/c/en/us/td/docs/routers/ios/config/17-x/sec-vpn/b-security-vpn/m-sec-cfg-quantum-encryption-ppk.html#configuring-manual-ppks-in-ikev2-keyring', label: 'Cisco IOS XE 17.x — IKEv2 Keyring Configuration' },
@@ -2177,6 +2184,36 @@ const CMD_EXPLANATIONS = [
     text: (msg) => { const g = msg.match(/(\d+)/)[1]; const desc = {'1':'768-bit (broken, do not use)','2':'1024-bit (weak, deprecated by NIST)','5':'1536-bit (marginal)','14':'2048-bit MODP (minimum recommended)','15':'3072-bit MODP','16':'4096-bit MODP (strong)','19':'256-bit ECP/ECDH','20':'384-bit ECP/ECDH','21':'521-bit ECP/ECDH'}; return `<strong>Diffie-Hellman Group <code>${g}</code></strong> — ${desc[g]||'unknown group'}. DH enables two parties to derive a shared secret over an insecure channel. Both peers must use the same group. Note: all classical DH groups are vulnerable to quantum computers — adding <code>pqc mlkem768</code> in the IKEv2 proposal enables hybrid quantum-resistant key exchange.`; } },
   { match: /^lifetime:\s+(\d+)\s+seconds/i,
     text: (msg) => { const lt = msg.match(/(\d+)/)[1]; const hrs = Math.floor(parseInt(lt)/3600); return `<strong>IKE SA lifetime: <code>${lt}</code> seconds</strong> (${hrs} hours). After this time, the IKE SA expires and must be renegotiated with fresh Diffie-Hellman keys. Shorter lifetimes increase security (less time for brute-force attacks) but add overhead from more frequent rekeying. Default is 86400 seconds (24 hours).`; } },
+
+  // ─── show crypto session detail output lines ───
+  { match: /^Crypto session current status$/i,
+    text: '<strong>Show crypto session header.</strong> Displays a summary of all active IKEv2/IPSec crypto sessions on this router. Each session corresponds to a VPN tunnel. The <code>detail</code> keyword adds per-SA counters and lifetime information.' },
+  { match: /^Profile:\s+(\S+)/i,
+    text: (msg) => { const name = msg.match(/Profile:\s+(\S+)/i)[1]; return `<strong>IKEv2 Profile: <code>${name}</code>.</strong> The IKEv2 profile used for this crypto session. The profile defines peer matching criteria, authentication method, and keyring bindings. Configured via <code>crypto ikev2 profile ${name}</code>.`; } },
+  { match: /^Uptime:\s+(\S+)/i,
+    text: (msg) => { const up = msg.match(/Uptime:\s+(\S+)/i)[1]; return `<strong>Session uptime: <code>${up}</code> (HH:MM:SS).</strong> How long this crypto session has been continuously active since the IKE SA was last established. If the tunnel flaps (goes down and comes back), the uptime resets. A long uptime indicates a stable VPN connection.`; } },
+  { match: /^\s*Session status:\s+(.*)/i,
+    text: (msg) => { const st = msg.match(/Session status:\s+(.*)/i)[1].trim(); const explanations = { 'UP-ACTIVE': 'The VPN tunnel is fully operational — both IKE SA and IPSec SAs are established. Encrypted traffic can flow bidirectionally.', 'UP-IDLE': 'The IKE SA is established but no IPSec SAs are active. The tunnel will create child SAs when interesting traffic appears.', 'UP-NO-IKE': 'IPSec SAs exist but the IKE SA has expired or been deleted. Traffic still flows until IPSec SAs expire, but rekeying will fail.', 'DOWN-NEGOTIATING': 'IKE negotiation is in progress. The router is attempting to establish the tunnel.', 'DOWN': 'The tunnel is completely down. No IKE or IPSec SAs exist.' }; return `<strong>Session status: <code>${st}</code>.</strong> ${explanations[st] || 'Current state of the crypto session.'}`; } },
+  { match: /^\s*Peer:\s+(\S+)\/(\d+)/i,
+    text: (msg) => { const m = msg.match(/Peer:\s+(\S+)\/(\d+)/i); return `<strong>VPN peer: <code>${m[1]}</code>, port <code>${m[2]}</code>.</strong> The remote router\'s IP address and IKE port. Port <code>500</code> is standard IKE (UDP). Port <code>4500</code> indicates NAT-Traversal is active — IKE and ESP packets are encapsulated in UDP to traverse NAT devices (RFC 3947).`; } },
+  { match: /^\s*IKE SA:\s+local\s+(\S+)\s+remote\s+(\S+)\s+(\S+)/i,
+    text: (msg) => { const m = msg.match(/local\s+(\S+)\s+remote\s+(\S+)\s+(\S+)/i); return `<strong>IKE Security Association:</strong> local <code>${m[1]}</code> ↔ remote <code>${m[2]}</code>, status <code>${m[3]}</code>.<br>` +
+      `This is the IKEv2 management tunnel (Phase 1) that protects the control plane. It was negotiated during IKE_SA_INIT and IKE_AUTH exchanges. The IKE SA is used to create, rekey, and delete child SAs (IPSec tunnels). <code>Active</code> means the SA is current and in use.`; } },
+  { match: /^\s*IPSEC FLOW:\s+permit\s+ip\s+(.*)/i,
+    text: (msg) => { const flow = msg.match(/IPSEC FLOW:\s+(.*)/i)[1].trim(); return `<strong>IPSec traffic selector: <code>${flow}</code>.</strong> Defines which traffic is encrypted through this tunnel. The format is <code>permit ip src/mask/prot/port dst/mask/prot/port</code>. With VTI (Virtual Tunnel Interface), the selector is typically <code>0.0.0.0/0 → 0.0.0.0/0</code> because all traffic routed into the tunnel interface gets encrypted — the routing table controls what enters the tunnel, not an ACL.`; } },
+  { match: /^\s*Active SAs:\s+(\d+),\s+origin:\s+(.*)/i,
+    text: (msg) => { const m = msg.match(/Active SAs:\s+(\d+),\s+origin:\s+(.*)/i); return `<strong>Active Security Associations: <code>${m[1]}</code>, origin: <code>${m[2]}</code>.</strong><br>` +
+      `Each IPSec SA is unidirectional — <code>2</code> means one inbound + one outbound SA (normal for an active tunnel). Origin indicates how the SAs were created: <code>crypto map</code> = legacy method; <code>VTI</code> = Virtual Tunnel Interface (modern). If SAs are 0, the tunnel is configured but no data-plane encryption is active.`; } },
+  { match: /^\s*Inbound:\s+#pkts dec'ed\s+(\d+)\s+drop\s+(\d+)\s+life\s+\(KB\/Sec\)\s+(\d+)\/(\d+)/i,
+    text: (msg) => { const m = msg.match(/dec'ed\s+(\d+)\s+drop\s+(\d+)\s+life\s+\(KB\/Sec\)\s+(\d+)\/(\d+)/i); return `<strong>Inbound IPSec counters:</strong><br>` +
+      `<strong>#pkts dec'ed: <code>${m[1]}</code></strong> — packets successfully decrypted from the peer.<br>` +
+      `<strong>drop: <code>${m[2]}</code></strong> — packets dropped (integrity failure, replay attack, or SA mismatch).<br>` +
+      `<strong>life: <code>${m[3]}</code> KB / <code>${m[4]}</code> sec</strong> — remaining SA lifetime. The SA expires when either limit is reached, triggering automatic rekeying with fresh keys.`; } },
+  { match: /^\s*Outbound:\s+#pkts enc'ed\s+(\d+)\s+drop\s+(\d+)\s+life\s+\(KB\/Sec\)\s+(\d+)\/(\d+)/i,
+    text: (msg) => { const m = msg.match(/enc'ed\s+(\d+)\s+drop\s+(\d+)\s+life\s+\(KB\/Sec\)\s+(\d+)\/(\d+)/i); return `<strong>Outbound IPSec counters:</strong><br>` +
+      `<strong>#pkts enc'ed: <code>${m[1]}</code></strong> — packets encrypted and sent to the peer.<br>` +
+      `<strong>drop: <code>${m[2]}</code></strong> — packets that could not be encrypted (e.g., SA expired mid-packet, interface down).<br>` +
+      `<strong>life: <code>${m[3]}</code> KB / <code>${m[4]}</code> sec</strong> — remaining SA lifetime. When this reaches 0, IKEv2 automatically negotiates a new child SA (Phase 2 rekey) before the old one expires — ensuring no traffic interruption.`; } },
 
   // ─── show crypto isakmp sa output lines ───
   { match: /^IPv4 Crypto ISAKMP SA$/i,

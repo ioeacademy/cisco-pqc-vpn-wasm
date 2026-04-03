@@ -92,6 +92,32 @@ window.fmtPwd = function(dev, pwd) { return pwd || ''; };
   window.handleTabComplete = (devId, text) => Engine.handleTabComplete(devId, text);
   window.isVPNTunnelUp = (cellId, rA, rB) => Engine.isVPNTunnelUp(cellId, rA, rB);
   window.checkPPKStatus = (cellId, rA, rB) => Engine.checkPPKStatus(cellId, rA, rB);
+  window.checkMLKEMStatus = (cellId, rA, rB) => {
+    // JS shim: WASM engine doesn't export checkMLKEMStatus
+    // Check if tunnel is up AND both routers have ML-KEM in their proposals
+    const tunnel = Engine.isVPNTunnelUp(cellId, rA, rB);
+    if (!tunnel) return null;
+    const cA = Engine.getDeviceCryptoState(cellId + '_' + rA);
+    const cB = Engine.getDeviceCryptoState(cellId + '_' + rB);
+    if (!cA || !cB) return null;
+    // Find any proposal with a pqc/keyExchange containing mlkem
+    const propsA = cA.ikev2Proposals || {};
+    const propsB = cB.ikev2Proposals || {};
+    let algA = null, algB = null;
+    for (const name in propsA) {
+      const kx = propsA[name].keyExchange || propsA[name].pqc;
+      if (kx && /mlkem/i.test(kx)) { algA = kx; break; }
+    }
+    for (const name in propsB) {
+      const kx = propsB[name].keyExchange || propsB[name].pqc;
+      if (kx && /mlkem/i.test(kx)) { algB = kx; break; }
+    }
+    if (algA && algB) {
+      const alg = algA.toUpperCase().replace('MLKEM', 'ML-KEM-').replace('--', '-');
+      return { algorithm: alg };
+    }
+    return null;
+  };
   window.isReachable = (cellId, src, dst) => Engine.isReachable(cellId, src, dst);
   window.recalcOSPF = (cellId) => Engine.recalcOSPF(cellId);
   window.escHtml = (s) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
