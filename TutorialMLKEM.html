@@ -334,7 +334,7 @@ const TOPO_LINKS = [
 </script>
 <!-- Unified C++/WASM IOS Engine -->
 <script src="dist/ios-engine.js?v=5"></script>
-<script src="js/ios-adapter.js?v=5"></script>
+<script src="js/ios-adapter.js?v=6"></script>
 <script>
 /* =====================================================================
    TUTORIAL STEPS DEFINITION — Post-Quantum Cryptography VPN (ML-KEM Variant)
@@ -346,7 +346,7 @@ const TOPO_LINKS = [
 const TUTORIAL_STEPS = [
 
 /* ================================================================
-   PART 1: FOUNDATION — Basic Connectivity & Classical IPSec VPN
+   PART 1: FOUNDATION — Connectivity & Quantum-Safe IPSec VPN
 ================================================================ */
 
 /* -- Step 1: Introduction -- */
@@ -369,21 +369,21 @@ Quantum computers threaten the cryptographic algorithms used in today's VPNs. Th
 
 | Phase | Description |
 |---|---|
-| **Part 1** | Base connectivity & classical IPSec VPN |
-| **Part 2** | Add ML-KEM hybrid key exchange for quantum resistance |
-| **Part 3** | Verification & Troubleshooting |
+| **Part 1** | Base connectivity & quantum-safe IPSec VPN with ML-KEM |
+| **Part 2** | Understanding ML-KEM (FIPS 203) |
+| **Part 3** | Troubleshooting exercises |
 
 #### Network Topology:
 
 | Router | LAN Interface (Gi0/0) | WAN Interface (Se0/0/0) | Tunnel0 |
 |---|---|---|---|
-| **R1** | 10.10.10.1/24 | 192.168.12.1/30 | 10.10.0.1/30 |
-| **R2** | 11.11.11.1/24 | 192.168.12.2/30 | 10.10.0.2/30 |
+| **R1** | 192.0.2.1/24 | 198.51.100.1/30 | 198.51.100.5/30 |
+| **R2** | 203.0.113.1/24 | 198.51.100.2/30 | 198.51.100.6/30 |
 
 | Host | IP Address | Gateway |
 |---|---|---|
-| **PC1** | 10.10.10.100/24 | 10.10.10.1 |
-| **PC2** | 11.11.11.100/24 | 11.11.11.1 |
+| **PC1** | 192.0.2.10/24 | 192.0.2.1 |
+| **PC2** | 203.0.113.10/24 | 203.0.113.1 |
 
 > **Note:** This tutorial uses the modern **VTI (Virtual Tunnel Interface)** approach instead of legacy crypto maps (which reached End-of-Life per Cisco bulletin).
 
@@ -406,14 +406,14 @@ Before building the VPN, both routers need IP addresses and routes.
 enable
 configure terminal
 interface GigabitEthernet0/0
- ip address 10.10.10.1 255.255.255.0
+ ip address 192.0.2.1 255.255.255.0
  no shutdown
  exit
 interface Serial0/0/0
- ip address 192.168.12.1 255.255.255.252
+ ip address 198.51.100.1 255.255.255.252
  no shutdown
  exit
-ip route 11.11.11.0 255.255.255.0 192.168.12.2
+ip route 203.0.113.0 255.255.255.0 198.51.100.2
 end
 \`\`\`
 
@@ -422,184 +422,191 @@ end
 enable
 configure terminal
 interface GigabitEthernet0/0
- ip address 11.11.11.1 255.255.255.0
+ ip address 203.0.113.1 255.255.255.0
  no shutdown
  exit
 interface Serial0/0/0
- ip address 192.168.12.2 255.255.255.252
+ ip address 198.51.100.2 255.255.255.252
  no shutdown
  exit
-ip route 10.10.10.0 255.255.255.0 192.168.12.1
+ip route 192.0.2.0 255.255.255.0 198.51.100.1
 end
 \`\`\`
 
-> **Verify:** On R1, run \`ping 11.11.11.1\`. You should see \`!!!!!\` (5 successful pings).
+> **Verify:** On R1, run \`ping 203.0.113.1\`. You should see \`!!!!!\` (5 successful pings).
 > **Note:** These static routes via Serial will be replaced later by routes via Tunnel0 once the VTI is configured.`,
   commands: {
-    r1: ['enable','configure terminal','interface GigabitEthernet0/0','ip address 10.10.10.1 255.255.255.0','no shutdown','exit','interface Serial0/0/0','ip address 192.168.12.1 255.255.255.252','no shutdown','exit','ip route 11.11.11.0 255.255.255.0 192.168.12.2','end'],
-    r2: ['enable','configure terminal','interface GigabitEthernet0/0','ip address 11.11.11.1 255.255.255.0','no shutdown','exit','interface Serial0/0/0','ip address 192.168.12.2 255.255.255.252','no shutdown','exit','ip route 10.10.10.0 255.255.255.0 192.168.12.1','end']
+    r1: ['enable','configure terminal','interface GigabitEthernet0/0','ip address 192.0.2.1 255.255.255.0','no shutdown','exit','interface Serial0/0/0','ip address 198.51.100.1 255.255.255.252','no shutdown','exit','ip route 203.0.113.0 255.255.255.0 198.51.100.2','end'],
+    r2: ['enable','configure terminal','interface GigabitEthernet0/0','ip address 203.0.113.1 255.255.255.0','no shutdown','exit','interface Serial0/0/0','ip address 198.51.100.2 255.255.255.252','no shutdown','exit','ip route 192.0.2.0 255.255.255.0 198.51.100.1','end']
   },
-  validate:()=>isReachable(CELL_ID,'r1','11.11.11.1') && isReachable(CELL_ID,'r2','10.10.10.1'),
+  validate:()=>isReachable(CELL_ID,'r1','203.0.113.1') && isReachable(CELL_ID,'r2','192.0.2.1'),
   hints:[
-    { detect:(dev,cmd)=>cmd.match(/ping\s+11\.11\.11\.1/i) && !isReachable(CELL_ID,'r1','11.11.11.1'),
+    { detect:(dev,cmd)=>cmd.match(/ping\s+11\.11\.11\.1/i) && !isReachable(CELL_ID,'r1','203.0.113.1'),
       message:'Ping fails. Check that <strong>both</strong> routers have IPs configured, interfaces are <code>no shutdown</code>, and static routes are in place.', type:'warning' },
     { detect:(dev,cmd)=>cmd.match(/^ip\s+addr/i) && dev.mode!=='interface',
       message:'You need to be in interface mode first. Use <code>interface GigabitEthernet0/0</code> or <code>interface Serial0/0/0</code>.', type:'nudge' },
   ]
 },
 
-/* -- Step 3: IKEv2 Proposal & Policy (IKE Phase 1) -- */
+/* -- Step 3: IKEv2 Proposal, Policy & Keyring -- */
 {
-  title:'IKEv2 Proposal & Policy (IKE Phase 1)',
+  title:'IKEv2 Proposal, Policy & Keyring',
   type:'config', part:'base', router:'both',
-  instruction:`### Step 3 — IKE Phase 1: IKEv2 Proposal & Policy
+  instruction:`### Step 3 — IKEv2 Proposal, Policy & Keyring
 
-> **Concept:** IKEv2 uses **proposals** to define encryption, integrity, and DH group parameters, and **policies** to link proposals to negotiations. This is the modern replacement for legacy ISAKMP policies.
+> **Concept:** IKEv2 uses **proposals** to define encryption, integrity, DH group, and post-quantum key exchange parameters. A **policy** links proposals to negotiations. A **keyring** stores pre-shared keys for peer authentication. This configuration includes **ML-KEM-768** (FIPS 203) from the start for quantum resistance.
 
-#### On both R1 and R2 — create the IKEv2 proposal:
+#### On both R1 and R2 — create the IKEv2 proposal with ML-KEM:
 \`\`\`
 configure terminal
-crypto ikev2 proposal CLASSIC-VPN-PROPOSAL
+crypto ikev2 proposal ikev2proposal
  encryption aes-cbc-256
- integrity sha256
- group 16
+ integrity sha512
+ group 21
+ pqc mlkem768
  exit
 \`\`\`
 
-#### Then create an IKEv2 policy referencing the proposal:
+#### Create an IKEv2 policy referencing the proposal:
 \`\`\`
-crypto ikev2 policy VPN-POLICY
- proposal CLASSIC-VPN-PROPOSAL
+crypto ikev2 policy ikev2policy
+ proposal ikev2proposal
  exit
 \`\`\`
 
-#### Also configure ISAKMP keys for backward-compatible authentication:
+#### Configure the IKEv2 keyring for pre-shared key authentication:
 
 **On R1:**
 \`\`\`
-crypto isakmp policy 10
- encryption aes 256
- hash sha256
- authentication pre-share
- group 16
+crypto ikev2 keyring ikev2keyring
+ peer R2_PEER
+  address 203.0.113.1
+  pre-shared-key Cisco@123
  exit
-crypto isakmp key cisco123 address 11.11.11.1
+exit
+end
 \`\`\`
 
 **On R2:**
 \`\`\`
-crypto isakmp policy 10
- encryption aes 256
- hash sha256
- authentication pre-share
- group 16
+crypto ikev2 keyring ikev2keyring
+ peer R1_PEER
+  address 192.0.2.1
+  pre-shared-key Cisco@123
  exit
-crypto isakmp key cisco123 address 10.10.10.1
+exit
+end
 \`\`\`
 
-> - \`aes-cbc-256\` = AES-256 CBC encryption
-> - \`sha256\` = SHA-256 integrity hash
-> - \`group 16\` = 4096-bit DH group (strong classical DH)`,
+> **Command Breakdown:**
+> - \`encryption aes-cbc-256\` = AES-256 CBC encryption for IKE SA
+> - \`integrity sha512\` = SHA-512 integrity check
+> - \`group 21\` = Classical ECDH with P-521 curve (the "traditional" half of hybrid)
+> - \`pqc mlkem768\` = **FIPS 203 ML-KEM-768** post-quantum KEM (the "quantum-safe" half)
+> - The \`pqc\` command triggers an **IKE_INTERMEDIATE** exchange (RFC 9370) where the ML-KEM encapsulation occurs. Both peers must have matching \`pqc\` values.`,
   commands: {
-    r1: ['configure terminal','crypto ikev2 proposal CLASSIC-VPN-PROPOSAL','encryption aes-cbc-256','integrity sha256','group 16','exit','crypto ikev2 policy VPN-POLICY','proposal CLASSIC-VPN-PROPOSAL','exit','crypto isakmp policy 10','encryption aes 256','hash sha256','authentication pre-share','group 16','exit','crypto isakmp key cisco123 address 11.11.11.1','end'],
-    r2: ['configure terminal','crypto ikev2 proposal CLASSIC-VPN-PROPOSAL','encryption aes-cbc-256','integrity sha256','group 16','exit','crypto ikev2 policy VPN-POLICY','proposal CLASSIC-VPN-PROPOSAL','exit','crypto isakmp policy 10','encryption aes 256','hash sha256','authentication pre-share','group 16','exit','crypto isakmp key cisco123 address 10.10.10.1','end']
+    r1: ['configure terminal','crypto ikev2 proposal ikev2proposal','encryption aes-cbc-256','integrity sha512','group 21','pqc mlkem768','exit','crypto ikev2 policy ikev2policy','proposal ikev2proposal','exit','crypto ikev2 keyring ikev2keyring','peer R2_PEER','address 203.0.113.1','pre-shared-key Cisco@123','exit','exit','end'],
+    r2: ['configure terminal','crypto ikev2 proposal ikev2proposal','encryption aes-cbc-256','integrity sha512','group 21','pqc mlkem768','exit','crypto ikev2 policy ikev2policy','proposal ikev2proposal','exit','crypto ikev2 keyring ikev2keyring','peer R1_PEER','address 192.0.2.1','pre-shared-key Cisco@123','exit','exit','end']
   },
   validate:()=>{
     const d1=iosDevices[CELL_ID+'_r1'], d2=iosDevices[CELL_ID+'_r2'];
     if(!d1||!d2) return false;
-    const prop1=d1.crypto.ikev2Proposals['CLASSIC-VPN-PROPOSAL'], prop2=d2.crypto.ikev2Proposals['CLASSIC-VPN-PROPOSAL'];
-    const pol1=d1.crypto.ikev2Policies['VPN-POLICY'], pol2=d2.crypto.ikev2Policies['VPN-POLICY'];
+    const prop1=d1.crypto.ikev2Proposals['ikev2proposal'], prop2=d2.crypto.ikev2Proposals['ikev2proposal'];
+    const pol1=d1.crypto.ikev2Policies['ikev2policy'], pol2=d2.crypto.ikev2Policies['ikev2policy'];
     if(!prop1||!prop2||!pol1||!pol2) return false;
-    const k1=d1.crypto.isakmpKeys.find(k=>k.peerAddr==='11.11.11.1');
-    const k2=d2.crypto.isakmpKeys.find(k=>k.peerAddr==='10.10.10.1');
-    return !!(k1 && k2 && k1.key===k2.key);
+    return !!(prop1.keyExchange==='mlkem768' && prop2.keyExchange==='mlkem768');
   },
   hints:[
-    { detect:(dev,cmd)=>cmd.match(/crypto\s+isakmp\s+key/i) && dev._rKey==='r1' && cmd.includes('10.10.10.1'),
-      message:'On R1, the address should be R2\'s LAN IP: <code>11.11.11.1</code> (not R1\'s own IP).', type:'warning' },
-    { detect:(dev,cmd)=>cmd.match(/crypto\s+isakmp\s+key/i) && dev._rKey==='r2' && cmd.includes('11.11.11.1'),
-      message:'On R2, the address should be R1\'s LAN IP: <code>10.10.10.1</code> (not R2\'s own IP).', type:'warning' },
+    { detect:(dev,cmd)=>cmd.match(/crypto\s+ikev2\s+proposal/i) && !cmd.match(/ikev2proposal/i),
+      message:'Name the proposal <code>ikev2proposal</code> so the later steps can reference it.', type:'nudge' },
+    { detect:(dev,cmd)=>cmd.match(/pqc\s+(\S+)/i) && !cmd.match(/mlkem768/i),
+      message:'Use <code>pqc mlkem768</code> in the IKEv2 proposal for ML-KEM-768 (NIST Level 3 security).', type:'warning' },
   ]
 },
 
-/* -- Step 4: IPSec Transform Set (IKE Phase 2) -- */
+/* -- Step 4: IKEv2 Profile, Transform Set & IPSec Profile -- */
 {
-  title:'IPSec Transform Set (IKE Phase 2)',
+  title:'IKEv2 Profile, Transform Set & IPSec Profile',
   type:'config', part:'base', router:'both',
-  instruction:`### Step 4 — IKE Phase 2: Transform Set
+  instruction:`### Step 4 — IKEv2 Profile, Transform Set & IPSec Profile
 
-> **Concept:** The transform set defines **how the actual data** is encrypted. It specifies the ESP encryption algorithm and integrity hash for the IPSec tunnel.
+> **Concept:** The **IKEv2 profile** defines peer authentication and links the keyring. The **transform set** defines how data is encrypted (ESP algorithms). The **IPSec profile** bundles everything into a reusable policy applied to the tunnel interface.
 
-#### On both R1 and R2:
-\`\`\`
-crypto ipsec transform-set PQC-TRANSFORM esp-256-aes esp-sha256-hmac
- mode tunnel
- exit
-\`\`\`
-
-> - \`esp-256-aes\` = AES-256 encryption for data confidentiality
-> - \`esp-sha256-hmac\` = SHA-256 HMAC for data integrity
-> - \`mode tunnel\` = full tunnel mode (encrypt entire original packet)
-> - These strong algorithms provide the best classical security foundation before adding quantum protection`,
-  commands: {
-    r1: ['configure terminal','crypto ipsec transform-set PQC-TRANSFORM esp-256-aes esp-sha256-hmac','mode tunnel','exit','end'],
-    r2: ['configure terminal','crypto ipsec transform-set PQC-TRANSFORM esp-256-aes esp-sha256-hmac','mode tunnel','exit','end']
-  },
-  validate:()=>{
-    const d1=iosDevices[CELL_ID+'_r1'], d2=iosDevices[CELL_ID+'_r2'];
-    return !!(d1?.crypto.transformSets['PQC-TRANSFORM'] && d2?.crypto.transformSets['PQC-TRANSFORM']);
-  },
-  hints:[
-    { detect:(dev,cmd)=>cmd.match(/transform-set/i) && !cmd.match(/PQC-TRANSFORM/i) && cmd.match(/\S+\s+\S+\s+\S+\s+\S+/),
-      message:'Use the transform set name <code>PQC-TRANSFORM</code> on both routers so they match.', type:'nudge' },
-  ]
-},
-
-/* -- Step 5: Crypto IPSec Profile -- */
-{
-  title:'Configure Crypto IPSec Profile',
-  type:'config', part:'base', router:'both',
-  instruction:`### Step 5 — Crypto IPSec Profile
-
-> **Concept:** An IPSec profile bundles the transform set and IKEv2 profile into a reusable policy object. This is the modern replacement for crypto maps (which reached End-of-Life per Cisco EOL bulletin). Unlike crypto maps, IPSec profiles do **not** require ACLs — encryption is driven by routing through the tunnel interface instead.
-
-#### On both R1 and R2:
+#### On R1:
 \`\`\`
 configure terminal
-crypto ipsec profile PQC-IPSEC-PROFILE
- set transform-set PQC-TRANSFORM
- set ikev2-profile PQC-PROFILE
+crypto ikev2 profile ikev2profile
+ match identity remote address 203.0.113.1
+ authentication local pre-share
+ authentication remote pre-share
+ keyring local ikev2keyring
+ exit
+crypto ipsec transform-set tset1 esp-aes 256 esp-sha256-hmac
+ mode tunnel
+ exit
+crypto ipsec profile ipsec_profile_vti
+ set transform-set tset1
+ set ikev2-profile ikev2profile
+ set pfs
  exit
 end
 \`\`\`
 
-> - \`crypto ipsec profile\` = Creates a named IPSec profile (analogous to a crypto map entry, but simpler)
-> - \`set transform-set\` = Links the ESP encryption/integrity algorithms
-> - \`set ikev2-profile\` = Links the IKEv2 profile for authentication and ML-KEM
+#### On R2:
+\`\`\`
+configure terminal
+crypto ikev2 profile ikev2profile
+ match identity remote address 192.0.2.1
+ authentication local pre-share
+ authentication remote pre-share
+ keyring local ikev2keyring
+ exit
+crypto ipsec transform-set tset1 esp-aes 256 esp-sha256-hmac
+ mode tunnel
+ exit
+crypto ipsec profile ipsec_profile_vti
+ set transform-set tset1
+ set ikev2-profile ikev2profile
+ set pfs
+ exit
+end
+\`\`\`
+
+> - \`match identity remote address\` = Which peer this profile applies to
+> - \`authentication local/remote pre-share\` = Use pre-shared key authentication
+> - \`keyring local ikev2keyring\` = Links the keyring from Step 3
+> - \`esp-aes 256\` = AES-256 encryption for data confidentiality
+> - \`esp-sha256-hmac\` = SHA-256 HMAC for data integrity
+> - \`mode tunnel\` = Full tunnel mode (encrypt entire original packet)
+> - \`set pfs\` = Enable Perfect Forward Secrecy for IPSec rekeying
 > - No ACL needed — the VTI handles traffic selection via routing`,
   commands: {
-    r1: ['configure terminal','crypto ipsec profile PQC-IPSEC-PROFILE','set transform-set PQC-TRANSFORM','set ikev2-profile PQC-PROFILE','exit','end'],
-    r2: ['configure terminal','crypto ipsec profile PQC-IPSEC-PROFILE','set transform-set PQC-TRANSFORM','set ikev2-profile PQC-PROFILE','exit','end']
+    r1: ['configure terminal','crypto ikev2 profile ikev2profile','match identity remote address 203.0.113.1','authentication local pre-share','authentication remote pre-share','keyring local ikev2keyring','exit','crypto ipsec transform-set tset1 esp-aes 256 esp-sha256-hmac','mode tunnel','exit','crypto ipsec profile ipsec_profile_vti','set transform-set tset1','set ikev2-profile ikev2profile','set pfs','exit','end'],
+    r2: ['configure terminal','crypto ikev2 profile ikev2profile','match identity remote address 192.0.2.1','authentication local pre-share','authentication remote pre-share','keyring local ikev2keyring','exit','crypto ipsec transform-set tset1 esp-aes 256 esp-sha256-hmac','mode tunnel','exit','crypto ipsec profile ipsec_profile_vti','set transform-set tset1','set ikev2-profile ikev2profile','set pfs','exit','end']
   },
   validate:()=>{
     const d1=iosDevices[CELL_ID+'_r1'], d2=iosDevices[CELL_ID+'_r2'];
     if(!d1||!d2) return false;
-    const p1=d1.crypto.ipsecProfiles?.['PQC-IPSEC-PROFILE'], p2=d2.crypto.ipsecProfiles?.['PQC-IPSEC-PROFILE'];
-    return !!(p1?.transformSet && p1?.ikev2Profile && p2?.transformSet && p2?.ikev2Profile);
+    const prof1=d1.crypto.ikev2Profiles['ikev2profile'], prof2=d2.crypto.ikev2Profiles['ikev2profile'];
+    const ts1=d1.crypto.transformSets['tset1'], ts2=d2.crypto.transformSets['tset1'];
+    const ip1=d1.crypto.ipsecProfiles?.['ipsec_profile_vti'], ip2=d2.crypto.ipsecProfiles?.['ipsec_profile_vti'];
+    return !!(prof1?.authLocal && prof2?.authLocal && ts1 && ts2 && ip1?.transformSet && ip2?.transformSet);
   },
   hints:[
-    { detect:(dev,cmd)=>cmd.match(/crypto\s+ipsec\s+profile/i) && !cmd.match(/PQC-IPSEC-PROFILE/i),
-      message:'Use the profile name <code>PQC-IPSEC-PROFILE</code> on both routers so they match.', type:'nudge' },
-    { detect:(dev,cmd)=>cmd.match(/set\s+ikev2-profile/i) && !cmd.match(/PQC-PROFILE/i),
-      message:'The IKEv2 profile name should be <code>PQC-PROFILE</code> (this will be created in Step 10).', type:'nudge' },
+    { detect:(dev,cmd)=>cmd.match(/crypto\s+ikev2\s+profile/i) && !cmd.match(/ikev2profile/i),
+      message:'Use the IKEv2 profile name <code>ikev2profile</code> on both routers.', type:'nudge' },
+    { detect:(dev,cmd)=>cmd.match(/transform-set/i) && !cmd.match(/tset1/i) && cmd.match(/\S+\s+\S+\s+\S+\s+\S+/),
+      message:'Use the transform set name <code>tset1</code> on both routers so they match.', type:'nudge' },
+    { detect:(dev,cmd)=>cmd.match(/crypto\s+ipsec\s+profile/i) && !cmd.match(/ipsec_profile_vti/i),
+      message:'Use the profile name <code>ipsec_profile_vti</code> on both routers.', type:'nudge' },
   ]
 },
 
-/* -- Step 6: Virtual Tunnel Interface (VTI) -- */
+/* -- Step 5: Virtual Tunnel Interface (VTI) -- */
 {
   title:'Configure Virtual Tunnel Interface (VTI)',
   type:'config', part:'base', router:'both',
-  instruction:`### Step 6 — Virtual Tunnel Interface (VTI)
+  instruction:`### Step 5 — Virtual Tunnel Interface (VTI)
 
 > **Concept:** VTI is the modern replacement for crypto maps. Instead of policy-based encryption (matching traffic against ACLs), VTI uses **routing-based encryption** — any traffic routed into the tunnel interface is automatically encrypted. This is simpler, more scalable, and supports dynamic routing protocols over the tunnel.
 
@@ -607,13 +614,13 @@ end
 \`\`\`
 configure terminal
 interface Tunnel0
- ip address 10.10.0.1 255.255.255.252
+ ip address 198.51.100.5 255.255.255.252
  tunnel source GigabitEthernet0/0
- tunnel destination 11.11.11.1
+ tunnel destination 203.0.113.1
  tunnel mode ipsec ipv4
- tunnel protection ipsec profile PQC-IPSEC-PROFILE
+ tunnel protection ipsec profile ipsec_profile_vti
  exit
-ip route 11.11.11.0 255.255.255.0 Tunnel0
+ip route 203.0.113.0 255.255.255.0 Tunnel0
 end
 \`\`\`
 
@@ -621,13 +628,13 @@ end
 \`\`\`
 configure terminal
 interface Tunnel0
- ip address 10.10.0.2 255.255.255.252
+ ip address 198.51.100.6 255.255.255.252
  tunnel source GigabitEthernet0/0
- tunnel destination 10.10.10.1
+ tunnel destination 192.0.2.1
  tunnel mode ipsec ipv4
- tunnel protection ipsec profile PQC-IPSEC-PROFILE
+ tunnel protection ipsec profile ipsec_profile_vti
  exit
-ip route 10.10.10.0 255.255.255.0 Tunnel0
+ip route 192.0.2.0 255.255.255.0 Tunnel0
 end
 \`\`\`
 
@@ -637,8 +644,8 @@ end
 > - The static route directs remote LAN traffic **through the tunnel** — this is what triggers encryption
 > - No ACLs needed — routing determines what gets encrypted`,
   commands: {
-    r1: ['configure terminal','interface Tunnel0','ip address 10.10.0.1 255.255.255.252','tunnel source GigabitEthernet0/0','tunnel destination 11.11.11.1','tunnel mode ipsec ipv4','tunnel protection ipsec profile PQC-IPSEC-PROFILE','exit','ip route 11.11.11.0 255.255.255.0 Tunnel0','end'],
-    r2: ['configure terminal','interface Tunnel0','ip address 10.10.0.2 255.255.255.252','tunnel source GigabitEthernet0/0','tunnel destination 10.10.10.1','tunnel mode ipsec ipv4','tunnel protection ipsec profile PQC-IPSEC-PROFILE','exit','ip route 10.10.10.0 255.255.255.0 Tunnel0','end']
+    r1: ['configure terminal','interface Tunnel0','ip address 198.51.100.5 255.255.255.252','tunnel source GigabitEthernet0/0','tunnel destination 203.0.113.1','tunnel mode ipsec ipv4','tunnel protection ipsec profile ipsec_profile_vti','exit','ip route 203.0.113.0 255.255.255.0 Tunnel0','end'],
+    r2: ['configure terminal','interface Tunnel0','ip address 198.51.100.6 255.255.255.252','tunnel source GigabitEthernet0/0','tunnel destination 192.0.2.1','tunnel mode ipsec ipv4','tunnel protection ipsec profile ipsec_profile_vti','exit','ip route 192.0.2.0 255.255.255.0 Tunnel0','end']
   },
   validate:()=>{
     const d1=iosDevices[CELL_ID+'_r1'], d2=iosDevices[CELL_ID+'_r2'];
@@ -647,68 +654,76 @@ end
     return !!(t1?.ip && t2?.ip && t1.tunnelConfig?.ipsecProfile && t2.tunnelConfig?.ipsecProfile);
   },
   hints:[
-    { detect:(dev,cmd)=>cmd.match(/tunnel\s+destination/i) && dev._rKey==='r1' && cmd.includes('10.10.10.1'),
-      message:'On R1, the tunnel destination should be R2\'s LAN IP: <code>11.11.11.1</code> (not R1\'s own IP).', type:'warning' },
-    { detect:(dev,cmd)=>cmd.match(/tunnel\s+destination/i) && dev._rKey==='r2' && cmd.includes('11.11.11.1'),
-      message:'On R2, the tunnel destination should be R1\'s LAN IP: <code>10.10.10.1</code> (not R2\'s own IP).', type:'warning' },
-    { detect:(dev,cmd)=>cmd.match(/tunnel\s+protection/i) && !cmd.match(/PQC-IPSEC-PROFILE/i),
-      message:'Use the IPSec profile name <code>PQC-IPSEC-PROFILE</code> (from Step 5).', type:'nudge' },
+    { detect:(dev,cmd)=>cmd.match(/tunnel\s+destination/i) && dev._rKey==='r1' && cmd.includes('192.0.2.1'),
+      message:'On R1, the tunnel destination should be R2\'s LAN IP: <code>203.0.113.1</code> (not R1\'s own IP).', type:'warning' },
+    { detect:(dev,cmd)=>cmd.match(/tunnel\s+destination/i) && dev._rKey==='r2' && cmd.includes('203.0.113.1'),
+      message:'On R2, the tunnel destination should be R1\'s LAN IP: <code>192.0.2.1</code> (not R2\'s own IP).', type:'warning' },
+    { detect:(dev,cmd)=>cmd.match(/tunnel\s+protection/i) && !cmd.match(/ipsec_profile_vti/i),
+      message:'Use the IPSec profile name <code>ipsec_profile_vti</code> (from Step 4).', type:'nudge' },
   ]
 },
 
-/* -- Step 7: Verify Classical VPN -- */
+/* -- Step 6: Verify Quantum-Safe VPN -- */
 {
-  title:'Verify Classical VPN Tunnel',
+  title:'Verify Quantum-Safe VPN',
   type:'config', part:'base', router:'r1',
-  instruction:`### Step 7 — Verify the Classical VPN
+  instruction:`### Step 6 — Verify the Quantum-Safe VPN
 
-Your IPSec VPN tunnel should now be active via the VTI. Let's verify:
+Your IPSec VPN tunnel should now be active via the VTI with **quantum-safe ML-KEM** key exchange. Let's verify:
 
 #### On R1, run these show commands:
+\`\`\`
+show crypto ikev2 sa detailed
+\`\`\`
+> Look for **"PQC Key Exchange: ML-KEM-768"** and **"Quantum-safe Encryption using PQC: ML-KEM-768"** in the output. This confirms the hybrid key exchange was successful.
+
+\`\`\`
+show crypto ikev2 proposal
+\`\`\`
+> Verify the proposal shows **"PQC: ML-KEM-768"** with integrity SHA-512 and group 21.
+
+\`\`\`
+show crypto ikev2 policy
+\`\`\`
+> Confirms the policy is linked to the ML-KEM proposal.
+
 \`\`\`
 show crypto ipsec profile
 \`\`\`
 > Verify the IPSec profile is configured with the correct transform set and IKEv2 profile.
 
 \`\`\`
-show crypto session
+ping 203.0.113.1
 \`\`\`
-> Shows active crypto sessions. Look for **Session status: UP-ACTIVE**.
-
-\`\`\`
-show crypto ipsec sa
-\`\`\`
-> Shows the IPSec Security Associations with encryption/decryption counters.
-
-\`\`\`
-ping 11.11.11.1
-\`\`\`
-> You should see \`!!!!!\` — traffic is now encrypted through the VPN tunnel!
-
-> **Note:** The tunnel is currently using **classical cryptography** only. In the next steps, we'll add **Post-Quantum Protection** using ML-KEM hybrid key exchange.`,
+> Traffic is now encrypted with **quantum-resistant** session keys derived from both ECDH and ML-KEM!`,
   commands: {
-    r1: ['show crypto ipsec profile','show crypto session','show crypto ipsec sa','ping 11.11.11.1']
+    r1: ['show crypto ikev2 sa detailed','show crypto ikev2 proposal','show crypto ikev2 policy','show crypto ipsec profile','ping 203.0.113.1']
   },
-  validate:()=>isVPNTunnelUp(CELL_ID,'r1','r2')!==null,
+  validate:()=>{
+    const s = checkMLKEMStatus(CELL_ID,'r1','r2');
+    return s && s.algorithm;
+  },
   hints:[
+    { detect:(dev,cmd)=>cmd.match(/show\s+crypto\s+ikev2\s+sa/i) && !(checkMLKEMStatus(CELL_ID,'r1','r2')?.algorithm),
+      message:'ML-KEM is not active. Make sure you configured the proposal with <code>pqc mlkem768</code> on <strong>both</strong> R1 and R2 (with <code>group 21</code> and <code>integrity sha512</code>).', type:'warning' },
     { detect:(dev,cmd)=>cmd.match(/^(show\s+crypto|ping)/i) && isVPNTunnelUp(CELL_ID,'r1','r2')===null,
-      message:'The VPN tunnel is not up yet. Make sure you completed Steps 3-6 on <strong>both</strong> R1 and R2, including the Tunnel0 interface and static routes via Tunnel0.', type:'warning' },
+      message:'The VPN tunnel is not up yet. Make sure you completed Steps 3-5 on <strong>both</strong> R1 and R2, including the Tunnel0 interface and static routes via Tunnel0.', type:'warning' },
   ]
 },
 
 /* ================================================================
-   PART 2: POST-QUANTUM CRYPTOGRAPHY — ML-KEM Hybrid Key Exchange
+   PART 2: UNDERSTANDING ML-KEM
 ================================================================ */
 
-/* -- Step 8: Understanding ML-KEM -- */
+/* -- Step 7: Understanding ML-KEM -- */
 {
   title:'Understanding ML-KEM (FIPS 203)',
   type:'info', part:'pqc', router:null,
-  instruction:`### Part 2 — ML-KEM Hybrid Key Exchange
+  instruction:`### Part 2 — Understanding ML-KEM Hybrid Key Exchange
 
-Your VPN tunnel is working, but it is vulnerable to **quantum attacks**. Let's fix that.
+Your VPN tunnel is working with **quantum-safe** ML-KEM protection. Let's understand how it works under the hood.
 
-> **[FIPS 203](https://csrc.nist.gov/pubs/fips/203/final)** defines **ML-KEM** (Module-Lattice-Based Key-Encapsulation Mechanism), a NIST-standardized post-quantum algorithm. Using **[RFC 9370](https://datatracker.ietf.org/doc/html/rfc9370)** (Multiple Key Exchanges in IKEv2), we perform a **hybrid key exchange** — combining classical ECDH with ML-KEM.
+> **[FIPS 203](https://csrc.nist.gov/pubs/fips/203/final)** defines **ML-KEM** (Module-Lattice-Based Key-Encapsulation Mechanism), a NIST-standardized post-quantum algorithm. Using **[RFC 9370](https://datatracker.ietf.org/doc/html/rfc9370)** (Multiple Key Exchanges in IKEv2), Cisco IOS XE performs a **hybrid key exchange** — combining classical ECDH with ML-KEM.
 
 #### How ML-KEM Hybrid Key Exchange Works:
 
@@ -737,170 +752,25 @@ Your VPN tunnel is working, but it is vulnerable to **quantum attacks**. Let's f
 | **ML-KEM-768** | 192-bit (NIST Level 3) | 1,184 bytes | 1,088 bytes |
 | **ML-KEM-1024** | 256-bit (NIST Level 5) | 1,568 bytes | 1,568 bytes |
 
-> **In this tutorial,** we'll use **ML-KEM-768** — the recommended balance of security and performance.
+> **In this tutorial,** we used **ML-KEM-768** — the recommended balance of security and performance.
 
 #### Supported Platforms:
 - Cisco Catalyst 8000V, 8300, 8500 Series
 - Requires **IOS XE 26.1.1** or later
 
-Click **Continue** to start configuring quantum-safe key exchange.`,
+Click **Continue** to proceed to the troubleshooting exercises.`,
   validate:()=>true, hints:[]
-},
-
-/* -- Step 9: IKEv2 Proposal with ML-KEM -- */
-{
-  title:'Configure IKEv2 Proposal with ML-KEM',
-  type:'config', part:'pqc', router:'both',
-  instruction:`### Step 9 — IKEv2 Proposal with ML-KEM Key Exchange
-
-Create an IKEv2 proposal that includes the **ML-KEM-768** key exchange alongside classical ECDH. This is the critical quantum-safe component.
-
-#### On both R1 and R2:
-\`\`\`
-configure terminal
-crypto ikev2 proposal PQC-PROPOSAL
- encryption aes-cbc-256
- integrity sha512
- group 21
- pqc mlkem768
- exit
-\`\`\`
-
-> **Command Breakdown:**
-> - \`encryption aes-cbc-256\` = AES-256 encryption for IKE SA
-> - \`integrity sha512\` = SHA-512 integrity check
-> - \`group 21\` = Classical ECDH with P-521 curve (the "traditional" half of hybrid)
-> - \`pqc mlkem768\` = **FIPS 203 ML-KEM-768** post-quantum KEM (the "quantum-safe" half)
-> - Add \`optional\` after the algorithm (e.g. \`pqc mlkem768 optional\`) to allow fallback to classical-only if the peer does not support ML-KEM.
-
-> **Important:** The \`pqc\` command triggers an **IKE_INTERMEDIATE** exchange (RFC 9370) where the ML-KEM encapsulation occurs. Both peers must have matching \`pqc\` values.`,
-  commands: {
-    r1: ['configure terminal','crypto ikev2 proposal PQC-PROPOSAL','encryption aes-cbc-256','integrity sha512','group 21','pqc mlkem768','exit','end'],
-    r2: ['configure terminal','crypto ikev2 proposal PQC-PROPOSAL','encryption aes-cbc-256','integrity sha512','group 21','pqc mlkem768','exit','end']
-  },
-  validate:()=>{
-    const d1=iosDevices[CELL_ID+'_r1'], d2=iosDevices[CELL_ID+'_r2'];
-    if(!d1||!d2) return false;
-    const p1=d1.crypto.ikev2Proposals['PQC-PROPOSAL'], p2=d2.crypto.ikev2Proposals['PQC-PROPOSAL'];
-    return !!(p1?.keyExchange==='mlkem768' && p2?.keyExchange==='mlkem768');
-  },
-  hints:[
-    { detect:(dev,cmd)=>cmd.match(/crypto\s+ikev2\s+proposal/i) && !cmd.match(/PQC-PROPOSAL/),
-      message:'Name the proposal <code>PQC-PROPOSAL</code> so the later steps can reference it.', type:'nudge' },
-    { detect:(dev,cmd)=>cmd.match(/pqc\s+(\S+)/i) && !cmd.match(/mlkem768/i),
-      message:'Use <code>pqc mlkem768</code> in the IKEv2 proposal for ML-KEM-768 (NIST Level 3 security).', type:'warning' },
-  ]
-},
-
-/* -- Step 10: IKEv2 Policy & Profile -- */
-{
-  title:'Configure IKEv2 Policy & Profile',
-  type:'config', part:'pqc', router:'both',
-  instruction:`### Step 10 — IKEv2 Policy and Profile
-
-Create an IKEv2 policy that references the ML-KEM proposal, and an IKEv2 profile for peer authentication. This profile is referenced by the IPSec profile configured in Step 5.
-
-#### On R1:
-\`\`\`
-configure terminal
-crypto ikev2 policy PQC-POLICY
- proposal PQC-PROPOSAL
- exit
-crypto ikev2 profile PQC-PROFILE
- match identity remote address 11.11.11.1
- authentication local pre-share key cisco123
- authentication remote pre-share key cisco123
- exit
-end
-\`\`\`
-
-#### On R2:
-\`\`\`
-configure terminal
-crypto ikev2 policy PQC-POLICY
- proposal PQC-PROPOSAL
- exit
-crypto ikev2 profile PQC-PROFILE
- match identity remote address 10.10.10.1
- authentication local pre-share key cisco123
- authentication remote pre-share key cisco123
- exit
-end
-\`\`\`
-
-> **Key Commands:**
-> - \`proposal PQC-PROPOSAL\` = Links the policy to the ML-KEM-enabled proposal from Step 9
-> - \`match identity remote address\` = Which peer this profile applies to
-> - \`authentication local/remote pre-share key\` = IKEv2 peer authentication
->
-> **Note:** Unlike the PPK approach (RFC 8784), ML-KEM does not require a separate keyring or pre-distributed quantum key. The quantum-safe key material is generated algorithmically during each IKE negotiation. The IKEv2 profile is linked to the tunnel via the IPSec profile (Step 5), not via a crypto map.`,
-  commands: {
-    r1: ['configure terminal','crypto ikev2 policy PQC-POLICY','proposal PQC-PROPOSAL','exit','crypto ikev2 profile PQC-PROFILE','match identity remote address 11.11.11.1','authentication local pre-share key cisco123','authentication remote pre-share key cisco123','exit','end'],
-    r2: ['configure terminal','crypto ikev2 policy PQC-POLICY','proposal PQC-PROPOSAL','exit','crypto ikev2 profile PQC-PROFILE','match identity remote address 10.10.10.1','authentication local pre-share key cisco123','authentication remote pre-share key cisco123','exit','end']
-  },
-  validate:()=>{
-    const d1=iosDevices[CELL_ID+'_r1'], d2=iosDevices[CELL_ID+'_r2'];
-    if(!d1||!d2) return false;
-    const pol1=d1.crypto.ikev2Policies['PQC-POLICY'], pol2=d2.crypto.ikev2Policies['PQC-POLICY'];
-    const prof1=d1.crypto.ikev2Profiles['PQC-PROFILE'], prof2=d2.crypto.ikev2Profiles['PQC-PROFILE'];
-    return !!(pol1?.proposals.includes('PQC-PROPOSAL') && pol2?.proposals.includes('PQC-PROPOSAL') && prof1?.authLocal && prof2?.authLocal);
-  },
-  hints:[
-    { detect:(dev,cmd)=>cmd.match(/proposal\s+/i) && !cmd.match(/PQC-PROPOSAL/),
-      message:'Reference the proposal <code>PQC-PROPOSAL</code> from Step 9.', type:'warning' },
-  ]
 },
 
 /* ================================================================
    PART 3: VERIFICATION & TROUBLESHOOTING
 ================================================================ */
 
-/* -- Step 11: Verify Quantum-Safe VPN -- */
-{
-  title:'Verify Quantum-Safe VPN',
-  type:'config', part:'verify', router:'r1',
-  instruction:`### Step 11 — Verify Quantum Resistance is Enabled
-
-Let's confirm the VPN tunnel is now **quantum-safe** with ML-KEM.
-
-#### On R1, run:
-\`\`\`
-show crypto ikev2 sa detailed
-\`\`\`
-> Look for **"PQC Key Exchange: ML-KEM-768"** and **"Quantum-safe Encryption using PQC: ML-KEM-768"** in the output. This confirms the hybrid key exchange was successful.
-
-\`\`\`
-show crypto ikev2 proposal
-\`\`\`
-> Verify the proposal shows **"PQC: ML-KEM-768"**.
-
-\`\`\`
-show crypto ikev2 policy
-\`\`\`
-> Confirms the policy is linked to the ML-KEM proposal.
-
-\`\`\`
-ping 11.11.11.1
-\`\`\`
-> Traffic is now encrypted with **quantum-resistant** session keys derived from both ECDH and ML-KEM!`,
-  commands: {
-    r1: ['show crypto ikev2 sa detailed','show crypto ikev2 proposal','show crypto ikev2 policy','ping 11.11.11.1']
-  },
-  validate:()=>{
-    const s = checkMLKEMStatus(CELL_ID,'r1','r2');
-    return s && s.algorithm;
-  },
-  hints:[
-    { detect:(dev,cmd)=>cmd.match(/show\s+crypto\s+ikev2\s+sa/i) && !(checkMLKEMStatus(CELL_ID,'r1','r2')?.algorithm),
-      message:'ML-KEM is not active. Make sure you configured the proposal with <code>pqc mlkem768</code> on <strong>both</strong> R1 and R2 (with <code>group 21</code> and <code>integrity sha512</code>).', type:'warning' },
-  ]
-},
-
-/* -- Step 12: Troubleshooting Classical VPN -- */
+/* -- Step 8: VPN Troubleshooting -- */
 {
   title:'VPN Troubleshooting Exercise',
   type:'config', part:'verify', router:'both',
-  instruction:`### Step 12 — VPN Troubleshooting
+  instruction:`### Step 8 — VPN Troubleshooting
 
 Oh no! Something broke. The VPN tunnel is **down**.
 
@@ -916,7 +786,7 @@ show ip route
 
 > **Hint:** Check R2's Tunnel0 interface configuration. Compare with R1 — is the tunnel protection applied?
 
-Fix the issue and verify the tunnel comes back up with \`ping 11.11.11.1\` from R1.`,
+Fix the issue and verify the tunnel comes back up with \`ping 203.0.113.1\` from R1.`,
   validate:()=>isVPNTunnelUp(CELL_ID,'r1','r2')!==null,
   onActivate:()=>{
     // Inject fault: remove tunnel protection from R2's Tunnel0
@@ -927,17 +797,17 @@ Fix the issue and verify the tunnel comes back up with \`ping 11.11.11.1\` from 
   },
   hints:[
     { detect:(dev,cmd)=>cmd.match(/show\s+(interfaces\s+Tunnel0|crypto\s+ipsec\s+profile|crypto\s+session)/i) && dev._rKey==='r2' && !iosDevices[CELL_ID+'_r2']?.interfaces['Tunnel0']?.tunnelConfig?.ipsecProfile,
-      message:'Notice that R2\'s Tunnel0 is missing <strong>tunnel protection</strong>. Try: <code>interface Tunnel0</code> then <code>tunnel protection ipsec profile PQC-IPSEC-PROFILE</code>.', type:'nudge' },
+      message:'Notice that R2\'s Tunnel0 is missing <strong>tunnel protection</strong>. Try: <code>interface Tunnel0</code> then <code>tunnel protection ipsec profile ipsec_profile_vti</code>.', type:'nudge' },
     { detect:(dev,cmd)=>cmd.match(/ping\s+11\.11\.11\.1/i) && isVPNTunnelUp(CELL_ID,'r1','r2')===null,
       message:'The tunnel is still down. Check R2\'s Tunnel0 tunnel protection configuration.', type:'warning' },
   ]
 },
 
-/* -- Step 13: ML-KEM Troubleshooting -- */
+/* -- Step 9: ML-KEM Troubleshooting -- */
 {
   title:'ML-KEM Troubleshooting Exercise',
   type:'config', part:'verify', router:'both',
-  instruction:`### Step 13 — ML-KEM Troubleshooting
+  instruction:`### Step 9 — ML-KEM Troubleshooting
 
 The quantum-safe VPN is broken! Someone removed the ML-KEM key exchange from R2's proposal.
 
@@ -954,7 +824,7 @@ show crypto ikev2 proposal
 To fix, enter R2's proposal and restore the ML-KEM key exchange:
 \`\`\`
 configure terminal
-crypto ikev2 proposal PQC-PROPOSAL
+crypto ikev2 proposal ikev2proposal
  pqc mlkem768
  exit
 end
@@ -969,7 +839,7 @@ Verify with \`show crypto ikev2 sa detailed\` — you should see "Quantum-safe E
     // Inject fault: remove key-exchange from R2's proposal
     const d2=iosDevices[CELL_ID+'_r2'];
     if(d2) {
-      const prop=d2.crypto.ikev2Proposals['PQC-PROPOSAL'];
+      const prop=d2.crypto.ikev2Proposals['ikev2proposal'];
       if(prop) prop.keyExchange=null;
     }
   },
@@ -981,7 +851,7 @@ Verify with \`show crypto ikev2 sa detailed\` — you should see "Quantum-safe E
   ]
 },
 
-/* -- Step 14: Summary & Best Practices -- */
+/* -- Step 10: Summary & Best Practices -- */
 {
   title:'Summary & Best Practices',
   type:'info', part:'verify', router:null,
@@ -993,12 +863,13 @@ You have successfully configured a **Quantum-Safe IPSec VPN** using **FIPS 203 M
 
 | Step | Configuration |
 |---|---|
-| IKEv2 Proposal | AES-CBC-256 + SHA-256 + ECDH Group 21 + **ML-KEM-768** |
-| IPSec Transform | ESP-AES-256 + SHA-256-HMAC |
+| IKEv2 Proposal | AES-CBC-256 + SHA-512 + ECDH Group 21 + **ML-KEM-768** |
+| IKEv2 Policy | Links to ML-KEM-enabled proposal |
+| IKEv2 Keyring | Pre-shared key authentication |
+| IKEv2 Profile | Peer identity matching + keyring binding |
+| IPSec Transform | ESP-AES-256 + SHA-256-HMAC + PFS |
 | IPSec Profile | Links transform set + IKEv2 profile |
 | Virtual Tunnel Interface | Routing-based encryption via Tunnel0 |
-| IKEv2 Policy | Links to ML-KEM-enabled proposal |
-| IKEv2 Profile | Peer authentication with pre-shared key |
 | **Key Exchange** | **Hybrid: ECDH P-521 + ML-KEM-768 (FIPS 203)** |
 
 #### Why VTI Instead of Crypto Maps?
@@ -1193,7 +1064,7 @@ function showBadgeModal() {
   const statsEl = document.getElementById('badge-stats-content');
   if (statsEl) {
     statsEl.innerHTML = `
-      <div><span class="stat-val">14/14</span>Steps</div>
+      <div><span class="stat-val">10/10</span>Steps</div>
       <div><span class="stat-val">${usedShowMe.size}</span>Help used</div>
       <div><span class="stat-val">${elapsed}m</span>Duration</div>`;
   }
@@ -1706,7 +1577,7 @@ const CMD_LEARN_LINKS = {
   'ip route':          { url: 'https://www.cisco.com/c/en/us/td/docs/routers/ios/config/17-x/ip-routing/b-ip-routing/m_iri-ip-prot-indep-0.html#GUID-E22CDE76-C196-4BB7-A9C5-513AB898034B', label: 'Cisco IOS XE 17.x — Static Routes' },
   'ping':              { url: 'https://www.cisco.com/c/en/us/support/docs/ios-nx-os-software/ios-software-releases-121-mainline/12778-ping-traceroute.html', label: 'Cisco: Using Ping and Traceroute' },
 
-  // Step 3: IKEv2 Proposal & Policy — deep-linked to specific sections
+  // Step 3: IKEv2 Proposal, Policy & Keyring — deep-linked to specific sections
   'crypto ikev2 proposal': { url: 'https://www.cisco.com/c/en/us/td/docs/routers/sdwan/command/iosxe/qualified-cli-command-reference-guide/m-crypto-commands.html#GUID-A14B38B1-541E-49F1-9343-B6175D421E93', label: 'Cisco Crypto Cmd Ref — crypto ikev2 proposal' },
   'crypto ikev2 policy':   { url: 'https://www.cisco.com/c/en/us/td/docs/routers/sdwan/command/iosxe/qualified-cli-command-reference-guide/m-crypto-commands.html#GUID-72D11419-977D-46B3-8C71-DFA5D9961D48', label: 'Cisco Crypto Cmd Ref — crypto ikev2 policy' },
   'encryption':            { url: 'https://www.cisco.com/c/en/us/td/docs/routers/sdwan/command/iosxe/qualified-cli-command-reference-guide/m-crypto-commands.html#GUID-F32CD6A2-EA12-48B3-809E-E9D5E06EFC94', label: 'Cisco Crypto Cmd Ref — encryption (IKEv2)' },
@@ -1719,16 +1590,16 @@ const CMD_LEARN_LINKS = {
   'lifetime':              { url: 'https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/security/a1/sec-a1-cr-book/sec-cr-c4.html#wp4832891500', label: 'Cisco Security Cmd Ref — ISAKMP policy (lifetime)' },
   'crypto isakmp key':     { url: 'https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/security/a1/sec-a1-cr-book/sec-cr-c4.html#wp6039879000', label: 'Cisco Security Cmd Ref — crypto isakmp key' },
 
-  // Step 4: IPSec Transform Set — deep-linked to transform-set section
+  // Step 4: IKEv2 Profile, Transform Set & IPSec Profile — deep-linked
   'crypto ipsec transform-set': { url: 'https://www.cisco.com/c/en/us/td/docs/routers/sdwan/command/iosxe/qualified-cli-command-reference-guide/m-crypto-commands.html#GUID-87B63BB3-A17F-4730-8972-EA9CEFBA414D', label: 'Cisco Crypto Cmd Ref — crypto ipsec transform-set' },
   'mode':                        { url: 'https://www.cisco.com/c/en/us/td/docs/routers/asr920/configuration/guide/sec_vpn/17-1-1/b-sec-ipsec-xe-17-1-asr920/b-sec-ipsec-xe-17-1-asr920_chapter_01.html', label: 'Cisco IOS XE 17 — Transform Set Mode' },
 
-  // Step 5: IPSec Profile — deep-linked to IPSec profile sections
+  // Step 4 (cont): IPSec Profile — deep-linked to IPSec profile sections
   'crypto ipsec profile': { url: 'https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/sec_conn_vpnips/configuration/xe-17/sec-sec-for-vpns-w-ipsec-xe-17-book/sec-cfg-vpn-ipsec.html', label: 'Cisco IOS XE 17 — Configuring IPSec Profiles' },
   'set transform-set':{ url: 'https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/security/s1/sec-s1-cr-book/sec-cr-s2.html#wp1098411242', label: 'Cisco Security Cmd Ref — set transform-set' },
   'set ikev2-profile': { url: 'https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/sec_conn_ike2vpn/configuration/xe-3s/sec-flex-vpn-xe-3s-book/sec-apx-ikev2-legacy.html', label: 'Cisco: IKEv2 Profile in IPSec Profile — set ikev2-profile' },
 
-  // Step 6: VTI — deep-linked to tunnel interface sections
+  // Step 5: VTI — deep-linked to tunnel interface sections
   'tunnel source':      { url: 'https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/interface/command/ir-cr-book/ir-t2.html', label: 'Cisco Interface Cmd Ref — tunnel source' },
   'tunnel destination': { url: 'https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/interface/command/ir-cr-book/ir-t2.html', label: 'Cisco Interface Cmd Ref — tunnel destination' },
   'tunnel mode':        { url: 'https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/interface/command/ir-cr-book/ir-t2.html', label: 'Cisco Interface Cmd Ref — tunnel mode' },
@@ -1741,10 +1612,10 @@ const CMD_LEARN_LINKS = {
   'success rate':      { url: 'https://www.cisco.com/c/en/us/support/docs/ios-nx-os-software/ios-software-releases-121-mainline/12778-ping-traceroute.html', label: 'Cisco: Using Ping and Traceroute' },
   'quantum resistance': { url: 'https://csrc.nist.gov/pubs/fips/203/final', label: 'NIST FIPS 203 — ML-KEM Standard' },
 
-  // Steps 7+: Show & Verify
+  // Step 6+: Show & Verify
   'show crypto':      { url: 'https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/security/s1/sec-s1-cr-book/sec-cr-s2.html', label: 'Cisco Security Cmd Ref — show crypto' },
 
-  // Steps 9-10: IKEv2 Proposal & Profile — ML-KEM hybrid key exchange
+  // Step 3-4: IKEv2 Keyring, Profile & ML-KEM hybrid key exchange
   'crypto ikev2 keyring':  { url: 'https://www.cisco.com/c/en/us/td/docs/routers/ios/config/17-x/sec-vpn/b-security-vpn/m-sec-cfg-quantum-encryption-ppk.html#configuring-manual-ppks-in-ikev2-keyring', label: 'Cisco IOS XE 17.x — IKEv2 Keyring Configuration' },
   'crypto ikev2 profile':  { url: 'https://www.cisco.com/c/en/us/td/docs/routers/ios/config/17-x/sec-vpn/b-security-vpn/m_sec-cfg-ikev2-flex.html#task_20288C58E8B1416897A763FABA8B0885', label: 'Cisco IOS XE 17.x — Configuring IKEv2 Profile' },
   'peer':                  { url: 'https://www.cisco.com/c/en/us/td/docs/routers/ios/config/17-x/sec-vpn/b-security-vpn/m-sec-cfg-quantum-encryption-ppk.html#configuring-manual-ppks-in-ikev2-keyring', label: 'Cisco IOS XE 17.x — IKEv2 Keyring Peer Config' },
@@ -1857,7 +1728,7 @@ const CMD_EXPLANATIONS = [
     text: '<strong>Displays the current system time.</strong> A leading <code>*</code> indicates the clock is not NTP-synchronized. Accurate time is important for log correlation and certificate validation.' },
   { match: /^write\s*memory$|^write$/i,
     text: '<strong>Saves the running configuration to NVRAM.</strong> Equivalent to <code>copy running-config startup-config</code>. Without this, all configuration changes are lost on reboot.' },
-  // Step 3: IKEv2 Proposal & Policy
+  // Step 3: IKEv2 Proposal, Policy & Keyring
   { match: /^crypto\s+ikev2\s+proposal\s+(\S+)/i,
     text: (cmd) => { const name = cmd.match(/crypto\s+ikev2\s+proposal\s+(\S+)/i)[1]; return `<strong>Creates an IKEv2 proposal</strong> named <code>${name}</code>. A proposal defines the cryptographic algorithms (encryption, integrity, DH group) offered during IKEv2 negotiation.`; } },
   { match: /^encryption\s+(\S+)/i,
@@ -1881,13 +1752,13 @@ const CMD_EXPLANATIONS = [
   { match: /^crypto\s+isakmp\s+key\s+(\S+)\s+address\s+(\S+)/i,
     text: (cmd) => { const m = cmd.match(/crypto\s+isakmp\s+key\s+(\S+)\s+address\s+(\S+)/i); return `<strong>Sets pre-shared key <code>${m[1]}</code></strong> for peer at <code>${m[2]}</code>. Both routers must have matching keys pointing to each other's WAN IP for IKE authentication to succeed.`; } },
 
-  // Step 4: IPSec Transform Set
+  // Step 4: Transform Set
   { match: /^crypto\s+ipsec\s+transform-set\s+(\S+)\s+(.*)/i,
     text: (cmd) => { const m = cmd.match(/crypto\s+ipsec\s+transform-set\s+(\S+)\s+(.*)/i); return `<strong>Creates IPSec transform set <code>${m[1]}</code></strong> with algorithms <code>${m[2]}</code>. The transform set defines how data packets are encrypted and authenticated inside the IPSec tunnel (IKE Phase 2 / ESP).`; } },
   { match: /^mode\s+(tunnel|transport)/i,
     text: (cmd) => { const m = cmd.match(/mode\s+(\S+)/i)[1]; return m==='tunnel' ? '<strong>Sets encapsulation to tunnel mode.</strong> The entire original IP packet is encrypted and wrapped in a new IP header. Used for site-to-site VPNs where the endpoints are different from the protected hosts.' : '<strong>Sets encapsulation to transport mode.</strong> Only the payload is encrypted; the original IP header is preserved. Used for host-to-host encryption.'; } },
 
-  // Step 5: IPSec Profile
+  // Step 4: IPSec Profile
   { match: /^crypto\s+ipsec\s+profile\s+(\S+)/i,
     text: (cmd) => { const name = cmd.match(/crypto\s+ipsec\s+profile\s+(\S+)/i)[1]; return `<strong>Creates IPSec profile <code>${name}</code></strong>. An IPSec profile bundles the transform set and IKEv2 profile into a reusable encryption policy. It is the modern replacement for crypto maps — applied to tunnel interfaces via <code>tunnel protection</code> instead of to physical interfaces.`; } },
   { match: /^set\s+transform-set\s+(\S+)/i,
@@ -1895,7 +1766,7 @@ const CMD_EXPLANATIONS = [
   { match: /^set\s+ikev2-profile\s+(\S+)/i,
     text: (cmd) => { const name = cmd.match(/set\s+ikev2-profile\s+(\S+)/i)[1]; return `<strong>Binds IKEv2 profile <code>${name}</code></strong> to this IPSec profile. This links the ML-KEM quantum-safe configuration to the IPSec tunnel, enabling hybrid post-quantum key exchange via RFC 9370.`; } },
 
-  // Step 6: VTI (Virtual Tunnel Interface)
+  // Step 5: VTI (Virtual Tunnel Interface)
   { match: /^interface\s+Tunnel\s*(\d+)/i,
     text: (cmd) => { const num = cmd.match(/Tunnel\s*(\d+)/i)[1]; return `<strong>Enters configuration mode for Virtual Tunnel Interface <code>Tunnel${num}</code>.</strong> VTI is the modern replacement for crypto maps — it provides a routable interface for IPSec encryption. Any traffic routed into this interface is automatically encrypted.`; } },
   { match: /^tunnel\s+source\s+(\S+)/i,
@@ -1907,7 +1778,7 @@ const CMD_EXPLANATIONS = [
   { match: /^tunnel\s+protection\s+ipsec\s+profile\s+(\S+)/i,
     text: (cmd) => { const name = cmd.match(/profile\s+(\S+)/i)[1]; return `<strong>Applies IPSec profile <code>${name}</code></strong> to this tunnel interface. This links the encryption parameters (transform set and IKEv2 profile) to the VTI. All traffic routed through this tunnel will be encrypted using the algorithms defined in the profile.`; } },
 
-  // Step 7 & 11: Show commands
+  // Step 6: Show & Verify commands
   { match: /^show\s+crypto\s+isakmp\s+sa$/i,
     text: '<strong>Displays ISAKMP Security Associations.</strong> Shows Phase 1 tunnel status. Look for <code>QM_IDLE</code> = tunnel is established and ready. <code>MM_NO_STATE</code> = negotiation failed or not started.' },
   { match: /^show\s+crypto\s+ipsec\s+sa$/i,
@@ -1939,7 +1810,7 @@ const CMD_EXPLANATIONS = [
   { match: /^show\s+running-config$/i,
     text: '<strong>Displays the current running configuration.</strong> Shows all configured commands on the router. Useful for reviewing the complete VPN and PQC setup.' },
 
-  // Step 9: IKEv2 Keyring
+  // Step 3: IKEv2 Keyring
   { match: /^crypto\s+ikev2\s+keyring\s+(\S+)/i,
     text: (cmd) => { const name = cmd.match(/crypto\s+ikev2\s+keyring\s+(\S+)/i)[1]; return `<strong>Creates or enters IKEv2 keyring <code>${name}</code>.</strong> A keyring holds peer definitions with authentication credentials (pre-shared keys). Multiple peers can be defined in one keyring.`; } },
   { match: /^peer\s+(\S+)/i,
@@ -1962,13 +1833,17 @@ const CMD_EXPLANATIONS = [
       `<strong>Key:</strong> mixed into session key derivation (never sent over the wire)<br>` +
       (req ? `<strong>Required:</strong> tunnel will <em>only</em> establish if PPK negotiation succeeds — no fallback to classical crypto` : `<strong>Optional:</strong> tunnel can fall back to classical crypto if peer doesn't support PPK`); } },
 
-  // Step 10: IKEv2 Profile
+  // Step 4: IKEv2 Profile
   { match: /^crypto\s+ikev2\s+profile\s+(\S+)/i,
     text: (cmd) => { const name = cmd.match(/crypto\s+ikev2\s+profile\s+(\S+)/i)[1]; return `<strong>Creates or enters IKEv2 profile <code>${name}</code>.</strong> The profile ties together peer matching, authentication method, and keyring bindings. It defines how IKEv2 sessions are established and authenticated.`; } },
   { match: /^match\s+identity\s+remote\s+address\s+(\S+)/i,
     text: (cmd) => { const ip = cmd.match(/match\s+identity\s+remote\s+address\s+(\S+)/i)[1]; return `<strong>Matches remote peer by IP <code>${ip}</code>.</strong> This profile will be used when the remote IKEv2 peer's identity matches this address. Each profile can match different peers.`; } },
   { match: /^authentication\s+(local|remote)\s+pre-share\s+key\s+(\S+)/i,
     text: (cmd) => { const m = cmd.match(/authentication\s+(local|remote)\s+pre-share\s+key\s+(\S+)/i); return `<strong>Sets ${m[1]} authentication</strong> to pre-shared key. The ${m[1]==='local'?'local router proves its identity':'remote peer is verified'} using this shared secret during IKE_AUTH exchange.`; } },
+  { match: /^authentication\s+(local|remote)\s+pre-share$/i,
+    text: (cmd) => { const dir = cmd.match(/authentication\s+(local|remote)/i)[1]; return `<strong>Sets ${dir} authentication</strong> to pre-shared key. The ${dir==='local'?'local router proves its identity':'remote peer is verified'} using keys from the linked keyring during IKE_AUTH exchange.`; } },
+  { match: /^set\s+pfs$/i,
+    text: '<strong>Enables Perfect Forward Secrecy (PFS)</strong> for IPSec Phase 2 rekeying. With PFS, each rekey generates a completely new DH exchange instead of deriving keys from the existing IKE SA. This ensures that compromising one session key does not compromise future or past sessions.' },
   { match: /^keyring\s+ppk\s+(\S+)/i,
     text: (cmd) => { const name = cmd.match(/keyring\s+ppk\s+(\S+)/i)[1]; return `<strong>Links PPK keyring <code>${name}</code></strong> for quantum-safe key derivation per RFC 8784. (This is the PPK approach — an alternative to the ML-KEM hybrid key exchange used in this tutorial.)`; } },
   { match: /^keyring\s+local\s+(\S+)/i,
@@ -3115,7 +2990,7 @@ document.addEventListener('wasm-ready', function() {
     </ul>
     <h4>Achievement Badge</h4>
     <ul>
-      <li>Complete all 14 steps to earn the <strong>Quantum Safe Networking Pioneer</strong> badge</li>
+      <li>Complete all 10 steps to earn the <strong>Quantum Safe Networking Pioneer</strong> badge</li>
       <li><strong>Gold badge</strong> &mdash; complete all steps by typing commands yourself (no "Show Me")</li>
       <li><strong>Silver badge</strong> &mdash; complete with some "Show Me" assistance</li>
       <li>Download your badge as PNG or SVG and share it on LinkedIn</li>

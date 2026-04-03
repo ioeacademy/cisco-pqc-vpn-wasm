@@ -47,7 +47,15 @@ window.fmtPwd = function(dev, pwd) { return pwd || ''; };
   for (const pcKey of PCS) Engine.createPC(cellId, pcKey);
 
   // ── Global function mappings ──
-  window.handleCmd = (devId, raw) => Engine.handleCmd(devId, raw);
+  window.handleCmd = (devId, raw) => {
+    // Shim: accept 'set pfs' in ipsec-profile mode (not yet in WASM engine)
+    const trimmed = raw.trim().toLowerCase();
+    if (trimmed === 'set pfs' || trimmed.startsWith('set pfs ')) {
+      const mode = Engine.getDeviceMode(devId);
+      if (mode === 'config-ipsec-profile') return [];
+    }
+    return Engine.handleCmd(devId, raw);
+  };
   window.handlePcCmd = (devId, raw) => Engine.handlePcCmd(devId, raw);
   window.getPrompt = (dev) => {
     if (typeof dev === 'string') return Engine.getPrompt(dev);
